@@ -1,4 +1,4 @@
-# TableString Plugin
+![](src/main/resources/images/tblstring-banner.png)
 
 > [!CAUTION]
 > While this plugin does work with one single table ("default"), it's still a PoC. Expect stuff to break and all.
@@ -7,7 +7,7 @@ Goal: make custom game text encodings usable directly inside Ghidra, without man
 
 ## Concept
 
-`TableString` is a custom Ghidra data type that decodes bytes or words using a project-local `.tbl` registry.
+`ghidra-tblString` is a custom Ghidra data type that decodes bytes or words using a project-local `.tbl` registry.
 
 Instead of treating encoded text as raw bytes like:
 
@@ -32,7 +32,7 @@ or, once controls are known:
 A `.tbl` file is imported into the Ghidra project and stored internally. Applied strings reference the imported table by ID, not by filesystem path.
 
 ```text
-TableString instance
+tblString instance
   table_id = credits
 ```
 
@@ -43,7 +43,7 @@ This keeps projects portable and reproducible.
 ### 1. Manage tables
 Menu:
 ```text
-Tools → TableString → Table Registry
+Tools → tblString → Table Registry
 ```
 
 Actions:
@@ -72,7 +72,7 @@ updated_at
 From the Listing view:
 
 ```text
-Right click selection → TableString → Apply TableString…
+Right click selection → tblString → Apply tblString…
 ```
 
 Dialog options:
@@ -86,7 +86,7 @@ Unknown bytes: . | hex | raw
 Controls: render | hide | annotate
 ```
 
-The plugin creates a `TableStringDataType` at the selected address.
+The plugin creates a `tblStringDataType` at the selected address.
 
 ### 3. Display decoded text
 
@@ -202,10 +202,14 @@ A project should decode correctly even if the original .tbl file is gone.
 
 Binary text data is often not ASCII and often not a normal C string. Ghidra can disassemble code, but it does not understand project-specific encodings.
 
-`TableString` fills that gap:
+`tblString` fills that gap:
 
 ```text
 raw bytes → readable game text
 ```
 
 inside the Listing view itself.
+
+# Credits
+
+- The font in the icon/logo is `Super Mario Bros. NES.ttf` by [TheWolfBunny64](https://thewolfbunny64.itch.io/super-mario-bros-nes).

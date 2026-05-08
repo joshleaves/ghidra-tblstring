@@ -1,34 +1,142 @@
+// Builds a Ghidra Extension for a given Ghidra installation.
+//
+// Set GHIDRA_INSTALL_DIR to your Ghidra install path, then run:
+//   gradle buildExtension
+
 plugins {
   id 'java'
-  id("com.diffplug.spotless") version "8.4.0"
+
+  id 'com.opencastsoftware.gradle.buildinfo' version '0.3.0'
+  id 'com.diffplug.spotless' version "8.4.0"
+  id 'com.adarshr.test-logger' version '4.0.0'
 }
 
 repositories {
   mavenCentral()
 }
 
-spotless {
-  format 'misc', {
-    // define the files to apply `misc` to
-    target '*.gradle', '.gitattributes', '.gitignore'
+sourceSets { main { java { srcDir(layout.buildDirectory.dir('generated/sources/buildinfo/java/main')) } } }
 
-    // define the steps to apply to those files
+def gitCommit = "unknown"
+try {
+  def detectedCommit = "git rev-parse --short HEAD".execute([], rootDir).text.trim()
+  if (!detectedCommit.isEmpty()) {
+    gitCommit = detectedCommit
+  }
+} catch (Exception ignored) {}
+
+def buildDate = new Date().format("yyyy-MM-dd HH:mm 'UTC'", TimeZone.getTimeZone('UTC'))
+
+buildInfo {
+  packageName = 'ghidra_tblstring'
+  className = 'BuildInfo'
+  properties = [
+    PLUGIN_VERSION: "0.1.0",
+    PLUGIN_GHIDRA_COMPATIBILITY: "12.0.4",
+    PLUGIN_BUILD_DATE: buildDate,
+    PLUGIN_BUILD_COMMIT: gitCommit,
+  ]
+}
+
+dependencies {
+  testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
+}
+
+test {
+  outputs.upToDateWhen { false }
+
+  useJUnitPlatform()
+  failFast = true
+
+  testlogger {
+    theme = 'mocha'
+    showPassed = true
+    showSkipped = true
+    showFailed = true
+    showExceptions = true
+    showCauses = true
+    showStackTraces = true
+    showStandardStreams = false
+  }
+}
+
+spotless {
+  // Generic text-file cleanup.
+  // This does NOT format Groovy/YAML semantically; it only trims whitespace,
+  // converts literal tab characters, and enforces a final newline.
+  format 'misc', {
+    target '*.gradle', '**/*.gradle', '.gitattributes', '.gitignore', '.github/**/*.yml', '.github/**/*.yaml'
+
     trimTrailingWhitespace()
     leadingTabsToSpaces(2)
     endWithNewline()
   }
-  java {
-    // don't need to set target, it is inferred from java
 
-    // apply a specific flavor of google-java-format
-    googleJavaFormat('1.35.0').reflowLongStrings().skipJavadocFormatting()
-    // fix formatting of type annotations
+  // Java source formatting.
+  // google-java-format owns the actual Java layout; indentation width is not configurable here.
+  // leadingTabsToSpaces(2) only converts literal tab characters before formatting.
+  java {
+    target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
+
+    trimTrailingWhitespace()
+    leadingTabsToSpaces(2)
+    endWithNewline()
+
+    // googleJavaFormat('1.35.0').reflowLongStrings().skipJavadocFormatting()
     formatAnnotations()
-    // make sure every file has the following copyright header.
-    // optionally, Spotless can set copyright years by digging
-    // through git history (see "license" section below)
-    licenseHeader '/* (C) Arnaud \'red\' Rouyer $YEAR */'
+
+    licenseHeader('/* (C) Arnaud \'red\' Rouyer 2026 */')
   }
 }
 
-apply from: "${System.env.GHIDRA_INSTALL_DIR}/support/buildExtension.gradle"
+
+def ghidraInstallDir
+
+if (System.env.GHIDRA_INSTALL_DIR) {
+    ghidraInstallDir = System.env.GHIDRA_INSTALL_DIR
+}
+else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
+    ghidraInstallDir = project.getProperty("GHIDRA_INSTALL_DIR")
+}
+
+if (ghidraInstallDir) {
+    apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
+}
+else {
+    throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
+}
+
+tasks.register('installLocalExtension', Copy) {
+  group = 'Ghidra Private'
+  description = 'Builds and installs the extension into the configured local Ghidra installation.'
+  dependsOn tasks.named('buildExtension')
+
+  def extensionDirEnv = System.env.GHIDRA_EXTENSION_DIR
+  if (!extensionDirEnv) {
+    throw new GradleException("GHIDRA_EXTENSION_DIR is not defined!")
+  }
+
+  def extensionsDir = new File(extensionDirEnv).getCanonicalFile()
+  def extensionName = 'ghidra-tblstring'
+  def extensionInstallDir = new File(extensionsDir, extensionName)
+
+  doFirst {
+    if (extensionInstallDir.exists()) {
+      delete extensionInstallDir
+    }
+  }
+
+  from({
+    def extensionZips = fileTree('dist') {
+      include '*.zip'
+    }.files.sort { a, b -> b.lastModified() <=> a.lastModified() }
+
+    if (extensionZips.isEmpty()) {
+      throw new GradleException("No extension zip found in dist/. Run buildExtension first.")
+    }
+
+    zipTree(extensionZips.first())
+  })
+  into extensionsDir
+}

@@ -1,5 +1,5 @@
 /* (C) Arnaud 'red' Rouyer 2026 */
-package tablestring;
+package ghidra_tblstring;
 
 import docking.ActionContext;
 import docking.action.DockingAction;
@@ -21,6 +21,11 @@ import ghidra.program.model.listing.Listing;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.util.ProgramSelection;
+import ghidra_tblstring.ghidra.TblRegistry;
+import ghidra_tblstring.ghidra.TblStringDataType;
+import ghidra_tblstring.tbl.TblTable;
+import ghidra_tblstring.ui.about.AboutAction;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -30,17 +35,19 @@ import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 
 @PluginInfo(
-    status = PluginStatus.RELEASED,
-    packageName = MiscellaneousPluginPackage.NAME,
-    category = PluginCategoryNames.ANALYSIS,
-    shortDescription = "TableString plugin",
-    description = "Apply and manage custom table-based string decoding")
-public class TableStringPlugin extends ProgramPlugin {
+  status = PluginStatus.RELEASED,
+  packageName = MiscellaneousPluginPackage.NAME,
+  category = PluginCategoryNames.ANALYSIS,
+  shortDescription = "tblString plugin",
+  description = "Apply and manage custom table-based string decoding")
+public class TblStringPlugin extends ProgramPlugin {
 
-  private final TableRegistry registry = new TableRegistry();
+  private final TblRegistry registry = new TblRegistry();
 
-  public TableStringPlugin(PluginTool tool) {
+  public TblStringPlugin(PluginTool tool) {
     super(tool);
+
+    new AboutAction(tool, getName());
 
     createActions();
   }
@@ -71,7 +78,7 @@ public class TableStringPlugin extends ProgramPlugin {
 
     try {
       String content = Files.readString(path, StandardCharsets.UTF_8);
-      TblParser.TblTable table = TblParser.parse("default", new StringReader(content));
+      TblTable table = TblTable.parse("default", new StringReader(content));
 
       registry.load(program);
 
@@ -164,16 +171,13 @@ public class TableStringPlugin extends ProgramPlugin {
             // Decode (using a table id, for now hardcoded)
             String tableId = "default";
 
-            TblParser.TblTable table = registry.get(tableId).orElse(null);
+            TblTable table = registry.get(tableId).orElse(null);
             if (table == null) {
               showMessage(
                   "TableString",
                   "Missing table: " + tableId + "\n\nUse Tools → Import default .tbl... first.");
               return;
             }
-
-            String decoded = TableStringDecoder.decode(bytes, table);
-            // showMessage("TableString", "Decoded: " + decoded);
 
             // Apply DataType on selection
             int transactionId = program.startTransaction("Apply TableString");
@@ -182,7 +186,7 @@ public class TableStringPlugin extends ProgramPlugin {
             try {
               Listing listing = program.getListing();
 
-              TableStringDataType dt = new TableStringDataType(registry, (int) length, tableId);
+              TblStringDataType dt = new TblStringDataType(registry, (int) length, tableId);
 
               listing.clearCodeUnits(start, start.add(length - 1), false);
               Data data = listing.createData(start, dt, (int) length);

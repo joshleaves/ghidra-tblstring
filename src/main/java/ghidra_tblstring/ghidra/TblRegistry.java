@@ -1,8 +1,11 @@
 /* (C) Arnaud 'red' Rouyer 2026 */
-package tablestring;
+package ghidra_tblstring.ghidra;
 
 import ghidra.framework.options.Options;
 import ghidra.program.model.listing.Program;
+import ghidra_tblstring.tbl.TblTable;
+import ghidra_tblstring.tbl.TblTableEntry;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.Collection;
@@ -11,13 +14,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
-public final class TableRegistry {
-  private final Map<String, TblParser.TblTable> tablesById = new LinkedHashMap<>();
+public final class TblRegistry {
+  private final Map<String, TblTable> tablesById = new LinkedHashMap<>();
 
   private static final String OPTIONS_NAME = "TableString";
   private static final String TABLE_PREFIX = "tables.";
 
-  public void register(String id, TblParser.TblTable table) {
+  public void register(String id, TblTable table) {
     String normalizedId = normalizeId(id);
 
     if (normalizedId.isEmpty()) {
@@ -31,13 +34,13 @@ public final class TableRegistry {
     tablesById.put(normalizedId, table);
   }
 
-  public Optional<TblParser.TblTable> get(String id) {
+  public Optional<TblTable> get(String id) {
     return Optional.ofNullable(tablesById.get(normalizeId(id)));
   }
 
-  public TblParser.TblTable require(String id) {
+  public TblTable require(String id) {
     String normalizedId = normalizeId(id);
-    TblParser.TblTable table = tablesById.get(normalizedId);
+    TblTable table = tablesById.get(normalizedId);
 
     if (table == null) {
       throw new IllegalArgumentException("Unknown table id: " + normalizedId);
@@ -62,7 +65,7 @@ public final class TableRegistry {
     return Collections.unmodifiableCollection(tablesById.keySet());
   }
 
-  public Collection<TblParser.TblTable> tables() {
+  public Collection<TblTable> tables() {
     return Collections.unmodifiableCollection(tablesById.values());
   }
 
@@ -85,7 +88,7 @@ public final class TableRegistry {
     }
 
     // Save current tables
-    for (Map.Entry<String, TblParser.TblTable> entry : tablesById.entrySet()) {
+    for (Map.Entry<String, TblTable> entry : tablesById.entrySet()) {
       String id = entry.getKey();
       String serialized = serialize(entry.getValue());
       options.setString(TABLE_PREFIX + id, serialized);
@@ -104,7 +107,7 @@ public final class TableRegistry {
       String content = options.getString(name, "");
 
       try {
-        TblParser.TblTable table = TblParser.parse(id, new StringReader(content));
+        TblTable table = TblTable.parse(id, new StringReader(content));
         register(id, table);
       } catch (IOException e) {
         throw new RuntimeException("Failed to parse table '" + id + "'", e);
@@ -112,10 +115,10 @@ public final class TableRegistry {
     }
   }
 
-  private static String serialize(TblParser.TblTable table) {
+  private static String serialize(TblTable table) {
     StringBuilder sb = new StringBuilder();
 
-    for (TblParser.TblEntry entry : table.getEntries()) {
+    for (TblTableEntry entry : table.getEntries()) {
       sb.append(bytesToHex(entry.getKey()));
       sb.append('=');
       sb.append(entry.getValue());

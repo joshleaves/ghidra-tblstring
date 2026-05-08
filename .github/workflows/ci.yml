@@ -1,0 +1,49 @@
+name: 'CI'
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+jobs:
+  build:
+    name: Continuous integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Temurin JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install Ghidra
+        uses: antoniovazquezblanco/setup-ghidra@v2
+        with:
+          version: 12.0.4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run Spotless check
+        run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }} spotlessCheck
+
+      - name: Run unit tests
+        run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }} test
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v3
+        if: ${{ always() && !cancelled() && hashFiles('build/test-results/test/*.xml') != '' }}
+        with:
+          name: JUnit tests
+          path: build/test-results/test/*.xml
+          reporter: java-junit

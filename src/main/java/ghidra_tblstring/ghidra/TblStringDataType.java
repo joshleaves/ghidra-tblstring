@@ -1,5 +1,5 @@
 /* (C) Arnaud 'red' Rouyer 2026 */
-package tablestring;
+package ghidra_tblstring.ghidra;
 
 import ghidra.docking.settings.Settings;
 import ghidra.program.model.data.AbstractStringDataType;
@@ -11,46 +11,48 @@ import ghidra.program.model.data.StringLayoutEnum;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.mem.Memory;
+import ghidra_tblstring.tbl.TblStringDecoder;
+import ghidra_tblstring.tbl.TblTable;
 
-public class TableStringDataType extends AbstractStringDataType {
+public class TblStringDataType extends AbstractStringDataType {
 
-  public static final String NAME = "TableString";
+  public static final String NAME = "tblString";
 
-  private final TableRegistry registry;
+  private final TblRegistry registry;
   private final int fixedLength;
   private final String tableCharsetName;
 
-  public TableStringDataType() {
-    this(new TableRegistry(), -1, null, null);
+  public TblStringDataType() {
+    this(new TblRegistry(), -1, null, null);
   }
 
-  public TableStringDataType(TableRegistry registry) {
+  public TblStringDataType(TblRegistry registry) {
     this(registry, -1, null, null);
   }
 
-  public TableStringDataType(TableRegistry registry, int fixedLength) {
+  public TblStringDataType(TblRegistry registry, int fixedLength) {
     this(registry, fixedLength, null, null);
   }
 
-  public TableStringDataType(TableRegistry registry, int fixedLength, String tableId) {
+  public TblStringDataType(TblRegistry registry, int fixedLength, String tableId) {
     this(registry, fixedLength, tableId, null);
   }
 
-  private TableStringDataType(
-      TableRegistry registry, int fixedLength, String tableId, DataTypeManager dtm) {
+  private TblStringDataType(
+      TblRegistry registry, int fixedLength, String tableId, DataTypeManager dtm) {
     super(
-        NAME, // data type name
-        NAME, // mnemonic
-        "tablestring", // default label
-        "TBL", // default label prefix
-        "tbl", // default abbrev label prefix
-        "Table-based decoded string", // description
-        null,
-        StringDataType.dataType, // replacement data type
-        StringLayoutEnum.FIXED_LEN, // StringLayoutEnum
-        dtm // data type manager
-        );
-    this.registry = registry != null ? registry : new TableRegistry();
+      NAME, // data type name
+      NAME, // mnemonic
+      ".tblString", // default label
+      "TBL", // default label prefix
+      "tbl", // default abbrev label prefix
+      "Table-based decoded string", // description
+      null,
+      StringDataType.dataType, // replacement data type
+      StringLayoutEnum.FIXED_LEN, // StringLayoutEnum
+      dtm // data type manager
+    );
+    this.registry = registry != null ? registry : new TblRegistry();
     this.fixedLength = fixedLength > 0 ? fixedLength : 1;
     this.tableCharsetName = tableId;
   }
@@ -95,12 +97,12 @@ public class TableStringDataType extends AbstractStringDataType {
         return null;
       }
 
-      TblParser.TblTable table = getTable(buf, id);
+      TblTable table = getTable(buf, id);
       if (table == null) {
         return null;
       }
 
-      return TableStringDecoder.decode(bytes, table);
+      return TblStringDecoder.decode(bytes, table);
     } catch (Exception e) {
       return null;
     }
@@ -150,8 +152,8 @@ public class TableStringDataType extends AbstractStringDataType {
     return null;
   }
 
-  private TblParser.TblTable getTable(MemBuffer buf, String id) {
-    TblParser.TblTable table = registry.get(id).orElse(null);
+  private TblTable getTable(MemBuffer buf, String id) {
+    TblTable table = registry.get(id).orElse(null);
     if (table != null) {
       return table;
     }
@@ -193,7 +195,7 @@ public class TableStringDataType extends AbstractStringDataType {
 
   @Override
   public boolean isEquivalent(DataType dataType) {
-    return dataType instanceof TableStringDataType;
+    return dataType instanceof TblStringDataType;
   }
 
   @Override
@@ -201,7 +203,7 @@ public class TableStringDataType extends AbstractStringDataType {
     if (dtm == getDataTypeManager()) {
       return this;
     }
-    return new TableStringDataType(registry, fixedLength, tableCharsetName, dtm);
+    return new TblStringDataType(registry, fixedLength, tableCharsetName, dtm);
   }
 
   @Override
