@@ -11,6 +11,8 @@ import java.util.Objects;
  * entry are rendered according to {@link DecodeOptions}.
  */
 public final class TblStringDecoder {
+  private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
+
   /**
    * Immutable options controlling decoder fallback behavior.
    *
@@ -108,21 +110,7 @@ public final class TblStringDecoder {
 
   private static TblTableEntry findMatch(byte[] bytes, int offset, TblTable table) {
     for (TblTableEntry entry : table.getLongestFirstEntries()) {
-      byte[] key = entry.getKey();
-
-      if (offset + key.length > bytes.length) {
-        continue;
-      }
-
-      boolean matches = true;
-      for (int i = 0; i < key.length; i++) {
-        if (bytes[offset + i] != key[i]) {
-          matches = false;
-          break;
-        }
-      }
-
-      if (matches) {
+      if (entry.matchesAt(bytes, offset)) {
         return entry;
       }
     }
@@ -135,7 +123,7 @@ public final class TblStringDecoder {
 
     switch (options.unknownMode) {
       case HEX_ANGLE:
-        result.append(String.format("<%02X>", unsigned));
+        appendHexUnknown(result, unsigned);
         break;
       case DOT:
         result.append('.');
@@ -144,8 +132,16 @@ public final class TblStringDecoder {
         result.append('?');
         break;
       default:
-        result.append(String.format("<%02X>", unsigned));
+        appendHexUnknown(result, unsigned);
         break;
     }
+  }
+
+  private static void appendHexUnknown(StringBuilder result, int unsigned) {
+    result
+        .append('<')
+        .append(HEX_DIGITS[(unsigned >>> 4) & 0xf])
+        .append(HEX_DIGITS[unsigned & 0xf])
+        .append('>');
   }
 }

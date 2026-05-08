@@ -7,8 +7,10 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Immutable parsed representation of a {@code .tbl} character table.
@@ -18,6 +20,8 @@ import java.util.Objects;
  * such as {@code 1F} and {@code 1F00}; the longest key must win at each input offset.
  */
 public final class TblTable {
+  private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
+
   private final String name;
   private final List<TblTableEntry> entries;
   private final List<TblTableEntry> longestFirstEntries;
@@ -26,25 +30,32 @@ public final class TblTable {
    * Creates an immutable table from pre-parsed entries.
    *
    * @param name human-readable table name
-   * @param entries non-empty entry list in source/display order
+   * @param entries non-empty entry list in source/display order, with unique keys
    * @throws NullPointerException if {@code name}, {@code entries}, or any entry is {@code null}
-   * @throws IllegalArgumentException if {@code entries} is empty
+   * @throws IllegalArgumentException if {@code entries} is empty or contains duplicate keys
    */
   public TblTable(String name, List<TblTableEntry> entries) {
     this.name = Objects.requireNonNull(name, "name");
 
-    List<TblTableEntry> copiedEntries = new ArrayList<>(Objects.requireNonNull(entries, "entries"));
+    List<TblTableEntry> copiedEntries =
+        new ArrayList<>(Objects.requireNonNull(entries, "entries"));
     if (copiedEntries.isEmpty()) {
       throw new IllegalArgumentException("entries cannot be empty");
     }
+    Set<String> seenKeys = new HashSet<>();
     for (TblTableEntry entry : copiedEntries) {
       Objects.requireNonNull(entry, "entry");
+      String key = bytesToHex(entry.getKey());
+      if (!seenKeys.add(key)) {
+        throw new IllegalArgumentException("duplicate key: " + key);
+      }
     }
 
     this.entries = Collections.unmodifiableList(copiedEntries);
 
     List<TblTableEntry> sorted = new ArrayList<>(copiedEntries);
-    sorted.sort(Comparator.comparingInt((TblTableEntry entry) -> entry.getKeyLength()).reversed());
+    sorted.sort(
+        Comparator.comparingInt((TblTableEntry entry) -> entry.getKeyLength()).reversed());
     this.longestFirstEntries = Collections.unmodifiableList(sorted);
   }
 
@@ -86,7 +97,7 @@ public final class TblTable {
    * @param name table name assigned to the parsed table
    * @param reader source reader
    * @return parsed table
-   * @throws IOException if a line is malformed or the table has no entries
+   * @throws IOException if a line is malformed, a key is duplicated, or the table has no entries
    * @throws NullPointerException if {@code name} or {@code reader} is {@code null}
    */
   public static TblTable parse(String name, Reader reader) throws IOException {
@@ -94,6 +105,7 @@ public final class TblTable {
     Objects.requireNonNull(reader, "reader");
 
     List<TblTableEntry> entries = new ArrayList<>();
+    Set<String> seenKeys = new HashSet<>();
 
     try (BufferedReader bufferedReader = new BufferedReader(reader)) {
       String line;
@@ -116,6 +128,12 @@ public final class TblTable {
         String valuePart = line.substring(separator + 1);
 
         byte[] key = parseHexKey(hexPart, lineNumber);
+        String keyId = bytesToHex(key);
+        if (!seenKeys.add(keyId)) {
+          throw new IOException(
+              "Invalid .tbl line " + lineNumber + ": duplicate key '" + keyId + "'");
+        }
+
         entries.add(new TblTableEntry(key, unescapeValue(valuePart)));
       }
     }
@@ -190,6 +208,18 @@ public final class TblTable {
           result.append(next);
           break;
       }
+    }
+
+    return result.toString();
+  }
+
+  private static String bytesToHex(byte[] bytes) {
+    StringBuilder result = new StringBuilder(bytes.length * 2);
+
+    for (byte b : bytes) {
+      int value = b & 0xff;
+      result.append(HEX_DIGITS[(value >>> 4) & 0xf]);
+      result.append(HEX_DIGITS[value & 0xf]);
     }
 
     return result.toString();

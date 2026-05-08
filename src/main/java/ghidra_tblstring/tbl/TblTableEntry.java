@@ -58,4 +58,18 @@ public final class TblTableEntry {
   public String getValue() {
     return value;
   }
+
+  boolean matchesAt(byte[] bytes, int offset) {
+    if (offset + key.length > bytes.length) {
+      return false;
+    }
+
+    for (int i = 0; i < key.length; i++) {
+      if (bytes[offset + i] != key[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }

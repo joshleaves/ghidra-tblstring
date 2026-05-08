@@ -159,12 +159,16 @@ final class TblTableTest {
   @Test
   void tableRejectsInvalidConstructorArguments() {
     TblTableEntry entry = new TblTableEntry(TestUtils.toBytesArray(0x41), "A");
+    TblTableEntry duplicateEntry = new TblTableEntry(TestUtils.toBytesArray(0x41), "B");
 
     assertThrows(NullPointerException.class, () -> new TblTable(null, List.of(entry)));
     assertThrows(NullPointerException.class, () -> new TblTable("test", null));
     assertThrows(
         NullPointerException.class, () -> new TblTable("test", Collections.singletonList(null)));
     assertThrows(IllegalArgumentException.class, () -> new TblTable("test", List.of()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new TblTable("test", List.of(entry, duplicateEntry)));
   }
 
   @DisplayName("rejects invalid entry constructor arguments")
@@ -180,7 +184,8 @@ final class TblTableTest {
   @Test
   void parseRejectsEmptyTable() {
     IOException exception =
-        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("\n# comment\n; comment\n"));
+        assertThrows(
+            IOException.class, () -> TestUtils.parseTblTableString("\n# comment\n; comment\n"));
 
     assertEquals("Table is empty", exception.getMessage());
   }
@@ -188,7 +193,8 @@ final class TblTableTest {
   @DisplayName("rejects lines without separators")
   @Test
   void parseRejectsMissingSeparator() {
-    IOException exception = assertThrows(IOException.class, () -> TestUtils.parseTblTableString("41A\n"));
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("41A\n"));
 
     assertEquals("Invalid .tbl line 1: missing '='", exception.getMessage());
   }
@@ -196,7 +202,8 @@ final class TblTableTest {
   @DisplayName("rejects empty keys")
   @Test
   void parseRejectsEmptyKey() {
-    IOException exception = assertThrows(IOException.class, () -> TestUtils.parseTblTableString("=A\n"));
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("=A\n"));
 
     assertEquals("Invalid .tbl line 1: empty key", exception.getMessage());
   }
@@ -204,7 +211,8 @@ final class TblTableTest {
   @DisplayName("rejects odd-length hex keys")
   @Test
   void parseRejectsOddLengthHexKeys() {
-    IOException exception = assertThrows(IOException.class, () -> TestUtils.parseTblTableString("123=A\n"));
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("123=A\n"));
 
     assertEquals(
         "Invalid .tbl line 1: hex key must have an even number of digits", exception.getMessage());
@@ -213,10 +221,20 @@ final class TblTableTest {
   @DisplayName("rejects invalid hex bytes")
   @Test
   void parseRejectsInvalidHexBytes() {
-    IOException exception = assertThrows(IOException.class, () -> TestUtils.parseTblTableString("4G=A\n"));
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("4G=A\n"));
 
     assertEquals("Invalid .tbl line 1: invalid hex byte '4G'", exception.getMessage());
     assertTrue(exception.getCause() instanceof NumberFormatException);
+  }
+
+  @DisplayName("rejects duplicate keys")
+  @Test
+  void parseRejectsDuplicateKeys() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("41=A\n 4 1=B\n"));
+
+    assertEquals("Invalid .tbl line 2: duplicate key '41'", exception.getMessage());
   }
 
   @DisplayName("reports physical line numbers after skipped lines")
@@ -225,6 +243,7 @@ final class TblTableTest {
     IOException exception =
         assertThrows(IOException.class, () -> TestUtils.parseTblTableString("# comment\n\n123=A\n"));
 
-    assertEquals("Invalid .tbl line 3: hex key must have an even number of digits", exception.getMessage());
+    assertEquals(
+        "Invalid .tbl line 3: hex key must have an even number of digits", exception.getMessage());
   }
 }
