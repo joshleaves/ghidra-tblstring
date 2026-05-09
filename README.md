@@ -41,19 +41,22 @@ This keeps projects portable and reproducible.
 ## User flow
 
 ### 1. Manage tables
-Menu:
+Open the registry window while browsing a program:
+
 ```text
-Tools → tblString → Table Registry
+Window → tbl Registry
 ```
 
 Actions:
 
-- Import `.tbl`
-- Paste `.tbl`
-- Edit table
-- Rename table
-- Export table
-- Delete table
+- Add `.tbl...`
+- Remove
+- Save as
+- Reload from Source File
+- Overwrite Source File
+- Set as Default
+- Add Entry / Remove Entry
+- Edit entries directly in the table
 
 Each table stores:
 
@@ -62,35 +65,26 @@ id
 name
 entries
 source_path optional
-source_sha256 optional
-created_at
-updated_at
 ```
+
+The left-side table list is sorted by display name. Imported tables get unique display names when a
+file with the same name is imported more than once.
 
 ### 2. Apply a table string
 
 From the Listing view:
 
 ```text
-Right click selection → tblString → Apply tblString…
+Right click selection → Data → tblString
 ```
 
-Dialog options:
-
-```text
-Table: credits
-Unit: byte | word-le | word-be
-Length: selection | fixed length | until terminator
-Terminator: optional hex pattern
-Unknown bytes: . | hex | raw
-Controls: render | hide | annotate
-```
-
-The plugin creates a `tblStringDataType` at the selected address.
+The popup only appears in the Listing, only when bytes are selected, and only when the current
+program has at least one `.tbl` table registered. The selected byte range is converted to a
+`tblString` data instance using the registry default table.
 
 ### 3. Display decoded text
 
-The Listing should show a decoded representation as the data value.
+The Listing shows the decoded representation as the data value.
 
 Examples:
 
@@ -98,6 +92,10 @@ Examples:
 credits_tbl_string "©BIRD STUDIO / SHUEISHA"
 menu_tbl_string    "OPTIONS"
 ```
+
+Each `tblString` data instance stores the selected table id in Ghidra data settings. Changing the
+registry refreshes the Code Browser display so already-applied strings re-render with the new table
+content.
 
 ## Table formats
 
@@ -163,17 +161,22 @@ menu text:
   terminator = 00
 ```
 
-This should use Ghidra data instance settings rather than generating one Java class per table.
+This uses Ghidra data instance settings rather than generating one Java class per table. The current
+setting is `.tbl Table`.
 
 ## Storage
 
 Store imported tables in the current Ghidra program, not as external file references.
 
-Good candidates:
+Current storage uses program options:
 
-- Program user data / options
-- Project file attachment
-- DomainObject properties
+```text
+tblString.defaultTableId
+tblString.tables.order
+tblString.tables.{id}.tbl
+tblString.tables.{id}.name
+tblString.tables.{id}.sourcePath
+```
 
 The important rule:
 

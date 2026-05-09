@@ -90,9 +90,12 @@ public final class TblTable {
    * Parses a common {@code .tbl} file.
    *
    * <p>Supported syntax is one {@code HEX=VALUE} mapping per line. Empty lines and lines starting
-   * with {@code #} or {@code ;} are ignored. Whitespace is allowed inside hex keys, values are kept
-   * verbatim after {@code =}, and the escape sequences {@code \n}, {@code \r}, {@code \t}, and
-   * {@code \\} are decoded.
+   * with {@code #} or {@code ;} are ignored. A leading {@code @TableID} line is accepted and used
+   * as the table name when {@code name} is blank. End-token entries such as {@code /FF=[END]\n}
+   * and simple control-code entries such as {@code $FD=[linebreak]\n} are decoded as normal dump
+   * mappings using their bracketed label and formatting suffix. Whitespace is allowed inside hex
+   * keys, values are kept verbatim after {@code =}, and the escape sequences {@code \n}, {@code \r},
+   * {@code \t}, and {@code \\} are decoded.
    *
    * @param name table name assigned to the parsed table
    * @param reader source reader
@@ -104,6 +107,7 @@ public final class TblTable {
     Objects.requireNonNull(name, "name");
     Objects.requireNonNull(reader, "reader");
 
+    String tableName = name;
     List<TblTableEntry> entries = new ArrayList<>();
     Set<String> seenKeys = new HashSet<>();
 
@@ -119,6 +123,25 @@ public final class TblTable {
           continue;
         }
 
+        if (line.startsWith("@")) {
+          String tableId = line.substring(1).trim();
+          if (tableId.isEmpty()) {
+            throw new IOException("Invalid .tbl line " + lineNumber + ": empty table id");
+          }
+          if (!tableId.matches("[0-9A-Za-z]+")) {
+            throw new IOException(
+                "Invalid .tbl line "
+                    + lineNumber
+                    + ": invalid table id '"
+                    + tableId
+                    + "'");
+          }
+          if (tableName.isBlank()) {
+            tableName = tableId;
+          }
+          continue;
+        }
+
         int separator = line.indexOf('=');
         if (separator < 0) {
           throw new IOException("Invalid .tbl line " + lineNumber + ": missing '='");
@@ -126,15 +149,16 @@ public final class TblTable {
 
         String hexPart = line.substring(0, separator).trim();
         String valuePart = line.substring(separator + 1);
+        EntryKind entryKind = parseEntryKind(hexPart, lineNumber);
 
-        byte[] key = parseHexKey(hexPart, lineNumber);
+        byte[] key = parseHexKey(entryKind.hexPart(), lineNumber);
         String keyId = bytesToHex(key);
         if (!seenKeys.add(keyId)) {
           throw new IOException(
               "Invalid .tbl line " + lineNumber + ": duplicate key '" + keyId + "'");
         }
 
-        entries.add(new TblTableEntry(key, unescapeValue(valuePart)));
+        entries.add(new TblTableEntry(key, parseValue(entryKind, valuePart, lineNumber)));
       }
     }
 
@@ -142,7 +166,107 @@ public final class TblTable {
       throw new IOException("Table is empty");
     }
 
-    return new TblTable(name, entries);
+    return new TblTable(tableName, entries);
+  }
+
+  /**
+   * Serializes this table's entries as {@code .tbl} text.
+   *
+   * <p>The table name is intentionally not emitted: it is metadata supplied by the caller or
+   * registry, not part of the common {@code .tbl} entry format.
+   *
+   * @return table entries formatted as {@code .tbl} text
+   */
+  public String toTblString() {
+    StringBuilder result = new StringBuilder();
+
+    for (TblTableEntry entry : entries) {
+      result.append(bytesToHex(entry.getKey()));
+      result.append('=');
+      result.append(escapeValue(entry.getValue()));
+      result.append('\n');
+    }
+
+    return result.toString();
+  }
+
+  private static EntryKind parseEntryKind(String hexPart, int lineNumber) throws IOException {
+    if (hexPart.isEmpty()) {
+      return EntryKind.normal(hexPart);
+    }
+
+    char prefix = hexPart.charAt(0);
+    if (prefix == '$' || prefix == '/') {
+      return new EntryKind(prefix, hexPart.substring(1));
+    }
+
+    if (prefix == '!') {
+      throw new IOException(
+          "Invalid .tbl line " + lineNumber + ": table switching is not supported");
+    }
+
+    return EntryKind.normal(hexPart);
+  }
+
+  private static String parseValue(EntryKind entryKind, String valuePart, int lineNumber)
+      throws IOException {
+    if (entryKind.isNormal()) {
+      return parseNormalValue(valuePart, lineNumber);
+    }
+
+    return parseNonNormalValue(entryKind, valuePart, lineNumber);
+  }
+
+  private static String parseNormalValue(String valuePart, int lineNumber) throws IOException {
+    if (valuePart.indexOf('[') >= 0 || valuePart.indexOf(']') >= 0) {
+      throw new IOException(
+          "Invalid .tbl line "
+              + lineNumber
+              + ": normal entries cannot contain '[' or ']' characters");
+    }
+
+    return unescapeValue(valuePart);
+  }
+
+  private static String parseNonNormalValue(EntryKind entryKind, String valuePart, int lineNumber)
+      throws IOException {
+    int labelStart = valuePart.indexOf('[');
+    int labelEnd = valuePart.indexOf(']');
+    if (labelStart != 0 || labelEnd <= labelStart + 1) {
+      throw new IOException(
+          "Invalid .tbl line " + lineNumber + ": invalid non-normal entry label");
+    }
+
+    String label = valuePart.substring(labelStart + 1, labelEnd);
+    if (!label.matches("[0-9A-Za-z]+")) {
+      throw new IOException(
+          "Invalid .tbl line " + lineNumber + ": invalid non-normal entry label '" + label + "'");
+    }
+
+    String suffix = valuePart.substring(labelEnd + 1);
+    if (entryKind.prefix() == '/' && !suffix.matches("(?:\\\\n)*")) {
+      throw new IOException(
+          "Invalid .tbl line " + lineNumber + ": end tokens cannot have parameters");
+    }
+
+    if (entryKind.prefix() == '$') {
+      int parameterStart = suffix.indexOf(',');
+      if (parameterStart >= 0) {
+        suffix = suffix.substring(0, parameterStart);
+      }
+    }
+
+    return "[" + label + "]" + unescapeValue(suffix);
+  }
+
+  private record EntryKind(char prefix, String hexPart) {
+    private static EntryKind normal(String hexPart) {
+      return new EntryKind('\0', hexPart);
+    }
+
+    private boolean isNormal() {
+      return prefix == '\0';
+    }
   }
 
   private static String stripBom(String line) {
@@ -206,6 +330,33 @@ public final class TblTable {
           break;
         default:
           result.append(next);
+          break;
+      }
+    }
+
+    return result.toString();
+  }
+
+  private static String escapeValue(String value) {
+    StringBuilder result = new StringBuilder(value.length());
+
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      switch (c) {
+        case '\n':
+          result.append("\\n");
+          break;
+        case '\r':
+          result.append("\\r");
+          break;
+        case '\t':
+          result.append("\\t");
+          break;
+        case '\\':
+          result.append("\\\\");
+          break;
+        default:
+          result.append(c);
           break;
       }
     }

@@ -2,8 +2,8 @@
 package ghidra_tblstring.ghidra;
 
 import ghidra.docking.settings.Settings;
+import ghidra.docking.settings.SettingsDefinition;
 import ghidra.program.model.data.AbstractStringDataType;
-import ghidra.program.model.data.CharsetSettingsDefinition;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.StringDataType;
@@ -13,9 +13,9 @@ import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.mem.Memory;
 import ghidra_tblstring.tbl.TblStringDecoder;
 import ghidra_tblstring.tbl.TblTable;
+import java.util.Optional;
 
 public class TblStringDataType extends AbstractStringDataType {
-
   public static final String NAME = "tblString";
 
   private final TblRegistry registry;
@@ -128,28 +128,31 @@ public class TblStringDataType extends AbstractStringDataType {
   }
 
   @Override
-  public String getCharsetName(Settings settings) {
-    if (settings != null) {
-      String id = CharsetSettingsDefinition.CHARSET.getCharset(settings, null);
-      if (id != null && !id.isBlank()) {
-        return id;
-      }
-    }
+  protected SettingsDefinition[] getBuiltInSettingsDefinitions() {
+    return new SettingsDefinition[] {TblStringTableSettingsDefinition.TABLE};
+  }
 
-    if (tableCharsetName != null && !tableCharsetName.isBlank()) {
-      return tableCharsetName;
+  @Override
+  public String getCharsetName(Settings settings) {
+    String id = getTableId(settings);
+    if (id != null && !id.isBlank()) {
+      return id;
     }
 
     return "default";
   }
 
   private String getTableId(Settings settings) {
-    String id = getCharsetName(settings);
-    if (id != null && !id.isBlank()) {
-      return id;
+    Optional<String> settingTableId = TblStringTableSettingsDefinition.TABLE.getTableId(settings);
+    if (settingTableId.isPresent()) {
+      return settingTableId.get();
     }
 
-    return null;
+    if (tableCharsetName != null && !tableCharsetName.isBlank()) {
+      return tableCharsetName;
+    }
+
+    return registry.getDefaultTableId().orElse(null);
   }
 
   private TblTable getTable(MemBuffer buf, String id) {

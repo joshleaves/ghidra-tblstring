@@ -2,6 +2,7 @@
 package ghidra_tblstring.ui.about;
 
 import docking.action.builder.ActionBuilder;
+import docking.tool.ToolConstants;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.util.Msg;
 import ghidra.util.Swing;
@@ -35,16 +36,16 @@ public final class AboutAction {
   private static final String PROJECT_REPO = "joshleaves/ghidra-tblstring";
   private static final String PROJECT_URL = "https://github.com/joshleaves/ghidra-tblstring";
 
-  private static final Icon SNES_ICON = ResourceManager.loadImage("images/tblstring-icon_16.png");
-  private static final ImageIcon GHIDRA_SNES_LOGO = new ImageIcon(
+  private static final Icon MENU_ICON = ResourceManager.loadImage("images/tblstring-icon_16.png");
+  private static final ImageIcon PLUGIN_BANNER = new ImageIcon(
     ResourceManager.loadImage("images/tblstring-banner.png")
       .getImage()
       .getScaledInstance(280, -1, Image.SCALE_SMOOTH));
 
   public AboutAction(PluginTool tool, String owner) {
     new ActionBuilder("About Ghidra-tblString", owner)
-      .menuPath("Help", "About Ghidra-tblString")
-      .menuIcon(SNES_ICON)
+      .menuPath(ToolConstants.MENU_HELP, "About Ghidra-tblString")
+      .menuIcon(MENU_ICON)
       .description("Show Ghidra-tblString version and compatibility information.")
       .onAction(context -> showAboutDialog(tool))
       .buildAndInstall(tool);
@@ -71,7 +72,7 @@ public final class AboutAction {
           panel.setPreferredSize(new Dimension(320, 420));
 
 
-          JLabel logoLabel = new JLabel(GHIDRA_SNES_LOGO);
+          JLabel logoLabel = new JLabel(PLUGIN_BANNER);
           logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
           panel.add(logoLabel);
 

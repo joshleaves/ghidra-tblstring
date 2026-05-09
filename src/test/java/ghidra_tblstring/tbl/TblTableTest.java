@@ -50,6 +50,15 @@ final class TblTableTest {
     assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0x41), "A");
   }
 
+  @DisplayName("accepts table id declarations")
+  @Test
+  void parseAcceptsTableIdDeclarations() throws IOException {
+    TblTable table = TblTable.parse("", new java.io.StringReader("@HIRA\n41=A\n"));
+
+    assertEquals("HIRA", table.getName());
+    assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0x41), "A");
+  }
+
   @DisplayName("allows whitespace around keys and separators")
   @Test
   void parseAllowsWhitespaceInsideHexKeyAndAroundSeparator() throws IOException {
@@ -237,6 +246,35 @@ final class TblTableTest {
     assertEquals("Invalid .tbl line 2: duplicate key '41'", exception.getMessage());
   }
 
+  @DisplayName("rejects normal entries containing bracket tokens")
+  @Test
+  void parseRejectsNormalEntriesContainingBracketTokens() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("41=[A]\n"));
+
+    assertEquals(
+        "Invalid .tbl line 1: normal entries cannot contain '[' or ']' characters",
+        exception.getMessage());
+  }
+
+  @DisplayName("rejects unsupported table switches")
+  @Test
+  void parseRejectsUnsupportedTableSwitches() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("!F8=[KATA],0\n"));
+
+    assertEquals("Invalid .tbl line 1: table switching is not supported", exception.getMessage());
+  }
+
+  @DisplayName("rejects invalid table id declarations")
+  @Test
+  void parseRejectsInvalidTableIdDeclarations() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TblTable.parse("", new java.io.StringReader("@BAD-ID\n41=A\n")));
+
+    assertEquals("Invalid .tbl line 1: invalid table id 'BAD-ID'", exception.getMessage());
+  }
+
   @DisplayName("reports physical line numbers after skipped lines")
   @Test
   void parseReportsPhysicalLineNumberAfterSkippedLines() {
@@ -245,5 +283,22 @@ final class TblTableTest {
 
     assertEquals(
         "Invalid .tbl line 3: hex key must have an even number of digits", exception.getMessage());
+  }
+
+  @DisplayName("parses end tokens as dump mappings")
+  @Test
+  void parseEndTokensAsDumpMappings() throws IOException {
+    TblTable table = TestUtils.parseTblTableString("/FF=[END]\\n\\n\n");
+
+    assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0xff), "[END]\n\n");
+  }
+
+  @DisplayName("parses simple control codes as dump mappings")
+  @Test
+  void parseSimpleControlCodesAsDumpMappings() throws IOException {
+    TblTable table = TestUtils.parseTblTableString("$FD=[linebreak]\\n\n$FE=[Color],palette=$%X,index=%D\n");
+
+    assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0xfd), "[linebreak]\n");
+    assertEntry(table.getEntries().get(1), TestUtils.toBytesArray(0xfe), "[Color]");
   }
 }
