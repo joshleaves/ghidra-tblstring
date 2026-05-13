@@ -27,6 +27,7 @@ import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import resources.ResourceManager;
 
+/** Installs and displays the extension About dialog under Ghidra's Help menu. */
 public final class AboutAction {
   private static final String PLUGIN_NAME = "Ghidra-tblString";
   private static final String PLUGIN_VERSION = BuildInfo.PLUGIN_VERSION;
@@ -42,6 +43,12 @@ public final class AboutAction {
       .getImage()
       .getScaledInstance(280, -1, Image.SCALE_SMOOTH));
 
+  /**
+   * Creates and installs the About action.
+   *
+   * @param tool tool that hosts the action
+   * @param owner action owner, usually the plugin name
+   */
   public AboutAction(PluginTool tool, String owner) {
     new ActionBuilder("About Ghidra-tblString", owner)
       .menuPath(ToolConstants.MENU_HELP, "About Ghidra-tblString")

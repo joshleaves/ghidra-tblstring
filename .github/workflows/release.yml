@@ -39,15 +39,15 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           ZIP_PATH="$(find dist -maxdepth 1 -type f -name '*.zip' | head -n 1)"
-          mv "$ZIP_PATH" "dist/ghidra_snes-v${VERSION}.zip"
+          mv "$ZIP_PATH" "dist/ghidra_tblstring-v${VERSION}.zip"
 
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ghidra_snes-${{ github.ref_name }}
-          path: dist/ghidra_snes-${{ github.ref_name }}.zip
+          name: ghidra_tblstring-${{ github.ref_name }}
+          path: dist/ghidra_tblstring-${{ github.ref_name }}.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ghidra_snes-${{ github.ref_name }}.zip
+          files: dist/ghidra_tblstring-${{ github.ref_name }}.zip

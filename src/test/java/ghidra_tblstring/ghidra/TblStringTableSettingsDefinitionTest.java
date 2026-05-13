@@ -69,6 +69,35 @@ final class TblStringTableSettingsDefinitionTest {
     assertEquals(1, TblStringTableSettingsDefinition.TABLE.getChoice(settings));
   }
 
+  @DisplayName("invalid table choices clear the stored table id")
+  @Test
+  void invalidTableChoicesClearStoredTableId() {
+    TblRegistry registry = new TblRegistry();
+    registry.register(
+        "credits",
+        new TblTable(
+            "credits.tbl",
+            List.of(new TblTableEntry(TestUtils.toBytesArray(0x41), "A"))));
+    TblStringTableSettingsDefinition.setRegistrySupplier(() -> registry);
+
+    SettingsImpl settings = new SettingsImpl();
+    TblStringTableSettingsDefinition.TABLE.setTableId(settings, "credits");
+
+    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 99);
+
+    assertFalse(TblStringTableSettingsDefinition.TABLE.getTableId(settings).isPresent());
+  }
+
+  @DisplayName("empty registries expose a placeholder choice")
+  @Test
+  void emptyRegistriesExposePlaceholderChoice() {
+    TblStringTableSettingsDefinition.setRegistrySupplier(TblRegistry::new);
+
+    assertArrayEquals(
+        new String[] {"<no .tbl tables registered>"},
+        TblStringTableSettingsDefinition.TABLE.getDisplayChoices(new SettingsImpl()));
+  }
+
   @DisplayName("table id lookup tolerates null settings")
   @Test
   void tableIdLookupToleratesNullSettings() throws IOException {

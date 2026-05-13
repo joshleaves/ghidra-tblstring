@@ -11,8 +11,6 @@ import java.util.Objects;
  * entry are rendered according to {@link DecodeOptions}.
  */
 public final class TblStringDecoder {
-  private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
-
   /**
    * Immutable options controlling decoder fallback behavior.
    *
@@ -138,10 +136,6 @@ public final class TblStringDecoder {
   }
 
   private static void appendHexUnknown(StringBuilder result, int unsigned) {
-    result
-        .append('<')
-        .append(HEX_DIGITS[(unsigned >>> 4) & 0xf])
-        .append(HEX_DIGITS[unsigned & 0xf])
-        .append('>');
+    result.append('<').append(TblHex.toHex(new byte[] {(byte) unsigned})).append('>');
   }
 }

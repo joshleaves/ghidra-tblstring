@@ -27,10 +27,24 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
 
   private TblStringTableSettingsDefinition() {}
 
+  /**
+   * Sets the registry supplier used to build the settings choice list.
+   *
+   * <p>The plugin installs its active-program registry here. Tests and disposal reset it to
+   * {@code null}, which makes the definition expose only the no-table placeholder.
+   *
+   * @param supplier supplier for the current registry, or {@code null} to clear it
+   */
   public static void setRegistrySupplier(Supplier<TblRegistry> supplier) {
     registrySupplier = supplier != null ? supplier : () -> null;
   }
 
+  /**
+   * Reads the stored table id from data settings.
+   *
+   * @param settings Ghidra settings object; {@code null} is accepted
+   * @return selected table id when present
+   */
   public Optional<String> getTableId(Settings settings) {
     if (settings == null) {
       return Optional.empty();
@@ -44,6 +58,12 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
     return Optional.of(tableId);
   }
 
+  /**
+   * Stores or clears the table id on data settings.
+   *
+   * @param settings Ghidra settings object to mutate
+   * @param tableId table id to store; blank clears the setting
+   */
   public void setTableId(Settings settings, String tableId) {
     if (tableId == null || tableId.isBlank()) {
       settings.clearSetting(TABLE_ID_SETTING_NAME);
@@ -142,7 +162,7 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
     return settings.getValue(TABLE_ID_SETTING_NAME) != null;
   }
 
-  private static Optional<TblRegistry> getCurrentRegistry() {
+  static Optional<TblRegistry> getCurrentRegistry() {
     return Optional.ofNullable(registrySupplier.get());
   }
 

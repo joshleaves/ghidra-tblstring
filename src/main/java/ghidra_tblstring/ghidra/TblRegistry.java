@@ -20,6 +20,14 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
+/**
+ * Program-local registry of imported {@link TblTable} instances.
+ *
+ * <p>The registry stores tables by normalized stable ids, tracks a default table, optionally keeps
+ * source file paths for reload/overwrite UI workflows, and persists all of that state in Ghidra
+ * program options. Mutating operations notify listeners; {@link #load(Program)} intentionally does
+ * not, because it is also used as a lazy cache-fill path during Listing rendering.
+ */
 public final class TblRegistry {
   private final Map<String, TblTable> tablesById = new LinkedHashMap<>();
   private final Map<String, String> sourcePathsById = new LinkedHashMap<>();
@@ -38,6 +46,13 @@ public final class TblRegistry {
   private static final Pattern INVALID_ID_CHARS = Pattern.compile("[^a-z0-9_-]+");
   private static final Pattern REPEATED_DASHES = Pattern.compile("-+");
 
+  /**
+   * Registers a table under a unique id derived from its display name.
+   *
+   * @param table table to register
+   * @return generated table id
+   * @throws IllegalArgumentException if {@code table} is {@code null}
+   */
   public String register(TblTable table) {
     if (table == null) {
       throw new IllegalArgumentException("Table cannot be null");
@@ -48,6 +63,13 @@ public final class TblRegistry {
     return id;
   }
 
+  /**
+   * Registers or replaces a table under an explicit normalized id.
+   *
+   * @param id stable table id; normalized with the same rules as imported names
+   * @param table table to register
+   * @throws IllegalArgumentException if the id is empty or the table is {@code null}
+   */
   public void register(String id, TblTable table) {
     String normalizedId = normalizeId(id);
 
@@ -74,14 +96,30 @@ public final class TblRegistry {
     }
   }
 
+  /**
+   * Adds a listener that runs after registry mutations.
+   *
+   * @param listener listener to invoke
+   */
   public void addChangeListener(Runnable listener) {
     changeListeners.add(Objects.requireNonNull(listener, "listener"));
   }
 
+  /**
+   * Removes a previously registered mutation listener.
+   *
+   * @param listener listener to remove
+   */
   public void removeChangeListener(Runnable listener) {
     changeListeners.remove(listener);
   }
 
+  /**
+   * Returns the optional source file path recorded for a table id.
+   *
+   * @param id table id
+   * @return source path when one is known
+   */
   public Optional<String> getSourcePath(String id) {
     String sourcePath = sourcePathsById.get(normalizeId(id));
     if (sourcePath == null || sourcePath.isBlank()) {
@@ -91,6 +129,13 @@ public final class TblRegistry {
     return Optional.of(sourcePath);
   }
 
+  /**
+   * Stores or clears the source file path for a table.
+   *
+   * @param id table id
+   * @param sourcePath absolute or relative source path; blank clears the path
+   * @throws IllegalArgumentException if the table id is unknown
+   */
   public void setSourcePath(String id, String sourcePath) {
     String normalizedId = normalizeId(id);
     if (!tablesById.containsKey(normalizedId)) {
@@ -110,10 +155,23 @@ public final class TblRegistry {
     }
   }
 
+  /**
+   * Looks up a table by id.
+   *
+   * @param id table id
+   * @return matching table, if present
+   */
   public Optional<TblTable> get(String id) {
     return Optional.ofNullable(tablesById.get(normalizeId(id)));
   }
 
+  /**
+   * Looks up a table by id or throws when it is absent.
+   *
+   * @param id table id
+   * @return matching table
+   * @throws IllegalArgumentException if the id is unknown
+   */
   public TblTable require(String id) {
     String normalizedId = normalizeId(id);
     TblTable table = tablesById.get(normalizedId);
@@ -125,10 +183,21 @@ public final class TblRegistry {
     return table;
   }
 
+  /**
+   * Checks whether a table id exists.
+   *
+   * @param id table id
+   * @return true when registered
+   */
   public boolean contains(String id) {
     return tablesById.containsKey(normalizeId(id));
   }
 
+  /**
+   * Removes a table and its source path.
+   *
+   * @param id table id
+   */
   public void remove(String id) {
     String normalizedId = normalizeId(id);
     TblTable removedTable = tablesById.remove(normalizedId);
@@ -145,6 +214,7 @@ public final class TblRegistry {
     }
   }
 
+  /** Removes all tables, source paths, and default-table metadata. */
   public void clear() {
     boolean changed =
         !tablesById.isEmpty() || !sourcePathsById.isEmpty() || defaultTableId != null;
@@ -156,22 +226,47 @@ public final class TblRegistry {
     }
   }
 
+  /**
+   * Returns table ids in registry order.
+   *
+   * @return immutable id collection
+   */
   public Collection<String> ids() {
     return Collections.unmodifiableCollection(tablesById.keySet());
   }
 
+  /**
+   * Returns tables in registry order.
+   *
+   * @return immutable table collection
+   */
   public Collection<TblTable> tables() {
     return Collections.unmodifiableCollection(tablesById.values());
   }
 
+  /**
+   * Returns whether the registry has no tables.
+   *
+   * @return true when empty
+   */
   public boolean isEmpty() {
     return tablesById.isEmpty();
   }
 
+  /**
+   * Returns the number of registered tables.
+   *
+   * @return table count
+   */
   public int size() {
     return tablesById.size();
   }
 
+  /**
+   * Returns the configured default table id, falling back to the first registered table if needed.
+   *
+   * @return default id, if any table exists
+   */
   public Optional<String> getDefaultTableId() {
     if (defaultTableId == null || !tablesById.containsKey(defaultTableId)) {
       return tablesById.keySet().stream().findFirst();
@@ -180,6 +275,12 @@ public final class TblRegistry {
     return Optional.of(defaultTableId);
   }
 
+  /**
+   * Sets the default table id.
+   *
+   * @param id table id
+   * @throws IllegalArgumentException if the id is unknown
+   */
   public void setDefaultTableId(String id) {
     String normalizedId = normalizeId(id);
     if (!tablesById.containsKey(normalizedId)) {
@@ -194,6 +295,11 @@ public final class TblRegistry {
     fireChanged();
   }
 
+  /**
+   * Saves the current registry to program options.
+   *
+   * @param program target Ghidra program
+   */
   public void save(Program program) {
     Options options = program.getOptions(OPTIONS_NAME);
 
@@ -220,6 +326,12 @@ public final class TblRegistry {
     }
   }
 
+  /**
+   * Loads registry state from program options without firing change listeners.
+   *
+   * @param program source Ghidra program
+   * @throws RuntimeException if a stored table cannot be parsed
+   */
   public void load(Program program) {
     Options options = program.getOptions(OPTIONS_NAME);
 

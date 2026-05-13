@@ -8,6 +8,8 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
 import ghidra_tblstring.ghidra.TblRegistry;
+import ghidra_tblstring.tbl.TblHex;
+import ghidra_tblstring.tbl.TblTextEscapes;
 import ghidra_tblstring.tbl.TblTable;
 import ghidra_tblstring.tbl.TblTableEntry;
 import java.awt.BorderLayout;
@@ -62,6 +64,13 @@ import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
 import resources.ResourceManager;
 
+/**
+ * Installs the {@code Window -> tbl Registry} action and owns the registry editor window.
+ *
+ * <p>The registry window is a regular Ghidra component provider, so it can remain open while the
+ * user navigates the Listing. It edits the active program registry, while decoding and persistence
+ * remain delegated to the {@code ghidra} and {@code tbl} packages.
+ */
 public final class ViewTblRegistryAction {
   private static final String TBL_REGISTRY_WINDOW_NAME = "tbl Registry";
 
@@ -73,10 +82,23 @@ public final class ViewTblRegistryAction {
   private static final Icon EXPORT_ICON = ResourceManager.loadImage("images/disk_save_as.png");
   private final TblRegistryProvider provider;
 
+  /**
+   * Creates and installs the registry window action.
+   *
+   * @param tool tool that hosts the action
+   * @param owner action owner, usually the plugin name
+   * @param registry active program registry
+   * @param programSupplier supplies the current program when UI actions run
+   */
   public ViewTblRegistryAction(PluginTool tool, String owner, TblRegistry registry, Supplier<Program> programSupplier) {
     provider = new TblRegistryProvider(tool, owner, registry, programSupplier);
   }
 
+  /**
+   * Creates the action with an empty registry and no current program supplier.
+   *
+   * <p>This constructor is retained for action discovery tests and simple standalone construction.
+   */
   public ViewTblRegistryAction(PluginTool tool, String owner) {
     this(tool, owner, new TblRegistry(), () -> null);
   }
@@ -225,22 +247,22 @@ public final class ViewTblRegistryAction {
       header.add(tableTitle, BorderLayout.WEST);
 
       filterField.getDocument().addDocumentListener(
-          new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) {
-              updateFilter();
-            }
+        new DocumentListener() {
+          @Override
+          public void insertUpdate(DocumentEvent event) {
+            updateFilter();
+          }
 
-            @Override
-            public void removeUpdate(DocumentEvent event) {
-              updateFilter();
-            }
+          @Override
+          public void removeUpdate(DocumentEvent event) {
+            updateFilter();
+          }
 
-            @Override
-            public void changedUpdate(DocumentEvent event) {
-              updateFilter();
-            }
-          });
+          @Override
+          public void changedUpdate(DocumentEvent event) {
+            updateFilter();
+          }
+        });
       filterField.setColumns(24);
       filterField.setToolTipText("Filter by hex key or decoded character");
       header.add(filterField, BorderLayout.EAST);
@@ -484,14 +506,7 @@ public final class ViewTblRegistryAction {
         return;
       }
 
-      int answer =
-          JOptionPane.showConfirmDialog(
-              component,
-              "Remove table '" + table.getName() + "' from this program?",
-              TBL_REGISTRY_WINDOW_NAME,
-              JOptionPane.OK_CANCEL_OPTION,
-              JOptionPane.WARNING_MESSAGE);
-      if (answer != JOptionPane.OK_OPTION) {
+      if (!confirmWarning("Remove table '" + table.getName() + "' from this program?")) {
         return;
       }
 
@@ -508,28 +523,18 @@ public final class ViewTblRegistryAction {
     }
 
     private void reloadSelectedTableFromSourceFile() {
-      TblTable table = selectedTable();
-      if (table == null) {
+      SelectedSourceTable selection = selectedSourceTable().orElse(null);
+      if (selection == null) {
         return;
       }
 
-      Path path = selectedTableSourcePath().orElse(null);
-      if (path == null) {
-        return;
-      }
-      if (!Files.exists(path)) {
-        showInfo(TBL_REGISTRY_WINDOW_NAME, "Source file does not exist: " + path);
-        return;
-      }
+      reloadSelectedSourceTable(selection);
+    }
 
-      int answer =
-          JOptionPane.showConfirmDialog(
-              component,
-              "Reload table '" + table.getName() + "' from " + path + "?",
-              TBL_REGISTRY_WINDOW_NAME,
-              JOptionPane.OK_CANCEL_OPTION,
-              JOptionPane.WARNING_MESSAGE);
-      if (answer != JOptionPane.OK_OPTION) {
+    private void reloadSelectedSourceTable(SelectedSourceTable selection) {
+      TblTable table = selection.table();
+      Path path = selection.path();
+      if (!confirmWarning("Reload table '" + table.getName() + "' from " + path + "?")) {
         return;
       }
 
@@ -556,28 +561,18 @@ public final class ViewTblRegistryAction {
     }
 
     private void overwriteSelectedTableSourceFile() {
-      TblTable table = selectedTable();
-      if (table == null) {
+      SelectedSourceTable selection = selectedSourceTable().orElse(null);
+      if (selection == null) {
         return;
       }
 
-      Path path = selectedTableSourcePath().orElse(null);
-      if (path == null) {
-        return;
-      }
-      if (!Files.exists(path)) {
-        showInfo(TBL_REGISTRY_WINDOW_NAME, "Source file does not exist: " + path);
-        return;
-      }
+      overwriteSelectedSourceTable(selection);
+    }
 
-      int answer =
-          JOptionPane.showConfirmDialog(
-              component,
-              "Overwrite " + path + " with table '" + table.getName() + "'?",
-              TBL_REGISTRY_WINDOW_NAME,
-              JOptionPane.OK_CANCEL_OPTION,
-              JOptionPane.WARNING_MESSAGE);
-      if (answer != JOptionPane.OK_OPTION) {
+    private void overwriteSelectedSourceTable(SelectedSourceTable selection) {
+      TblTable table = selection.table();
+      Path path = selection.path();
+      if (!confirmWarning("Overwrite " + path + " with table '" + table.getName() + "'?")) {
         return;
       }
 
@@ -617,14 +612,7 @@ public final class ViewTblRegistryAction {
 
       Path path = chooser.getSelectedFile().toPath();
       if (Files.exists(path)) {
-        int answer =
-            JOptionPane.showConfirmDialog(
-                component,
-                "Overwrite " + path.getFileName() + "?",
-                TBL_REGISTRY_WINDOW_NAME,
-                JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
+        if (!confirmWarning("Overwrite " + path.getFileName() + "?")) {
           return;
         }
       }
@@ -643,6 +631,24 @@ public final class ViewTblRegistryAction {
       } catch (IOException | RuntimeException e) {
         showError(TBL_REGISTRY_WINDOW_NAME, "Failed to save .tbl table: " + e.getMessage(), e);
       }
+    }
+
+    private Optional<SelectedSourceTable> selectedSourceTable() {
+      TblTable table = selectedTable();
+      if (table == null) {
+        return Optional.empty();
+      }
+
+      Path path = selectedTableSourcePath().orElse(null);
+      if (path == null) {
+        return Optional.empty();
+      }
+      if (!Files.exists(path)) {
+        showInfo(TBL_REGISTRY_WINDOW_NAME, "Source file does not exist: " + path);
+        return Optional.empty();
+      }
+
+      return Optional.of(new SelectedSourceTable(table, path));
     }
 
     private Optional<Path> selectedTableSourcePath() {
@@ -852,6 +858,16 @@ public final class ViewTblRegistryAction {
       tool.setStatusInfo(message, true);
       Msg.showError(ViewTblRegistryAction.class, component, title, message, throwable);
     }
+
+    private boolean confirmWarning(String message) {
+      return JOptionPane.showConfirmDialog(
+              component,
+              message,
+              TBL_REGISTRY_WINDOW_NAME,
+              JOptionPane.OK_CANCEL_OPTION,
+              JOptionPane.WARNING_MESSAGE)
+          == JOptionPane.OK_OPTION;
+    }
   }
 
   private interface EntryUpdateHandler {
@@ -894,7 +910,7 @@ public final class ViewTblRegistryAction {
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
       TblTableEntry entry = entries.get(rowIndex);
-      return columnIndex == 0 ? bytesToHex(entry.getKey()) : displayValue(entry.getValue());
+      return columnIndex == 0 ? TblHex.toHex(entry.getKey()) : displayValue(entry.getValue());
     }
 
     @Override
@@ -919,6 +935,8 @@ public final class ViewTblRegistryAction {
       return name;
     }
   }
+
+  private record SelectedSourceTable(TblTable table, Path path) {}
 
   private static final class HeaderCellRenderer extends DefaultTableCellRenderer {
     HeaderCellRenderer(JTable table) {
@@ -977,43 +995,25 @@ public final class ViewTblRegistryAction {
   }
 
   private static byte[] parseHexKey(String hex) {
-    String normalized = hex == null ? "" : hex.replaceAll("\\s+", "");
-    if (normalized.isEmpty()) {
-      throw new IllegalArgumentException("hex key cannot be empty");
-    }
-    if ((normalized.length() % 2) != 0) {
-      throw new IllegalArgumentException("hex key must have an even number of digits");
-    }
-
-    byte[] bytes = new byte[normalized.length() / 2];
-    for (int i = 0; i < bytes.length; i++) {
-      int offset = i * 2;
-      String pair = normalized.substring(offset, offset + 2);
-      try {
-        bytes[i] = (byte) Integer.parseInt(pair, 16);
-      } catch (NumberFormatException e) {
-        throw new IllegalArgumentException("invalid hex byte '" + pair + "'", e);
-      }
-    }
-    return bytes;
+    return TblHex.parseKey(hex);
   }
 
   private static byte[] nextAvailableKey(List<TblTableEntry> entries) {
     Set<String> existingKeys = new HashSet<>();
     for (TblTableEntry entry : entries) {
-      existingKeys.add(bytesToHex(entry.getKey()));
+      existingKeys.add(TblHex.toHex(entry.getKey()));
     }
 
     for (int value = 0; value <= 0xff; value++) {
       byte[] key = new byte[] {(byte) value};
-      if (!existingKeys.contains(bytesToHex(key))) {
+      if (!existingKeys.contains(TblHex.toHex(key))) {
         return key;
       }
     }
 
     for (int value = 0; value <= 0xffff; value++) {
       byte[] key = new byte[] {(byte) ((value >>> 8) & 0xff), (byte) (value & 0xff)};
-      if (!existingKeys.contains(bytesToHex(key))) {
+      if (!existingKeys.contains(TblHex.toHex(key))) {
         return key;
       }
     }
@@ -1021,18 +1021,11 @@ public final class ViewTblRegistryAction {
     throw new IllegalArgumentException("no available one- or two-byte key");
   }
 
-  private static String bytesToHex(byte[] bytes) {
-    char[] digits = "0123456789ABCDEF".toCharArray();
-    StringBuilder result = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      int value = b & 0xff;
-      result.append(digits[(value >>> 4) & 0xf]);
-      result.append(digits[value & 0xf]);
-    }
-    return result.toString();
+  static String unescapeCellValue(String value) {
+    return TblTextEscapes.unescape(expandDisplayTokens(value));
   }
 
-  private static String unescapeCellValue(String value) {
+  private static String expandDisplayTokens(String value) {
     StringBuilder result = new StringBuilder();
     String input = value == null ? "" : value;
 
@@ -1050,29 +1043,7 @@ public final class ViewTblRegistryAction {
         }
       }
 
-      if (c != '\\' || i + 1 >= input.length()) {
-        result.append(c);
-        continue;
-      }
-
-      char next = input.charAt(++i);
-      switch (next) {
-        case 'n':
-          result.append('\n');
-          break;
-        case 'r':
-          result.append('\r');
-          break;
-        case 't':
-          result.append('\t');
-          break;
-        case '\\':
-          result.append('\\');
-          break;
-        default:
-          result.append(next);
-          break;
-      }
+      result.append(c);
     }
 
     return result.toString();
@@ -1083,6 +1054,7 @@ public final class ViewTblRegistryAction {
     switch (normalized) {
       case "EMPTY":
         return "";
+      case "SP":
       case "SPACE":
         return " ";
       case "NEWLINE":
@@ -1119,45 +1091,65 @@ public final class ViewTblRegistryAction {
     }
   }
 
-  private static String displayValue(String value) {
+  static String displayValue(String value) {
     if (value.isEmpty()) {
       return "<EMPTY>";
     }
 
+    int firstInteriorOffset = 0;
+    int lastInteriorOffset = value.length();
+
+    while (firstInteriorOffset < lastInteriorOffset
+        && shouldDisplayAsBoundaryToken(value.charAt(firstInteriorOffset))) {
+      firstInteriorOffset++;
+    }
+    while (lastInteriorOffset > firstInteriorOffset
+        && shouldDisplayAsBoundaryToken(value.charAt(lastInteriorOffset - 1))) {
+      lastInteriorOffset--;
+    }
+
     StringBuilder result = new StringBuilder(value.length());
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      switch (c) {
-        case ' ':
-          result.append("<SPACE>");
-          break;
-        case '\n':
-          result.append("<NEWLINE>");
-          break;
-        case '\r':
-          result.append("<CR>");
-          break;
-        case '\t':
-          result.append("<TAB>");
-          break;
-        default:
-          appendVisibleCharacter(result, c);
-          break;
-      }
+    for (int i = 0; i < firstInteriorOffset; i++) {
+      appendBoundaryToken(result, value.charAt(i));
+    }
+    for (int i = firstInteriorOffset; i < lastInteriorOffset; i++) {
+      result.append(value.charAt(i));
+    }
+    for (int i = lastInteriorOffset; i < value.length(); i++) {
+      appendBoundaryToken(result, value.charAt(i));
     }
     return result.toString();
   }
 
-  private static void appendVisibleCharacter(StringBuilder result, char c) {
-    if (Character.isISOControl(c)) {
-      if (c <= 0xff) {
-        result.append(String.format(Locale.ROOT, "<x%02X>", (int) c));
-      } else {
-        result.append(String.format(Locale.ROOT, "<u%04X>", (int) c));
-      }
-      return;
-    }
+  private static boolean shouldDisplayAsBoundaryToken(char c) {
+    return c == ' ' || c == '\n' || c == '\r' || c == '\t' || Character.isISOControl(c);
+  }
 
-    result.append(c);
+  private static void appendBoundaryToken(StringBuilder result, char c) {
+    switch (c) {
+      case ' ':
+        result.append("<SP>");
+        break;
+      case '\n':
+        result.append("<NEWLINE>");
+        break;
+      case '\r':
+        result.append("<CR>");
+        break;
+      case '\t':
+        result.append("<TAB>");
+        break;
+      default:
+        appendControlToken(result, c);
+        break;
+    }
+  }
+
+  private static void appendControlToken(StringBuilder result, char c) {
+    if (c <= 0xff) {
+      result.append(String.format(Locale.ROOT, "<x%02X>", (int) c));
+    } else {
+      result.append(String.format(Locale.ROOT, "<u%04X>", (int) c));
+    }
   }
 }

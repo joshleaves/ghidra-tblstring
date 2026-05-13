@@ -17,6 +17,7 @@ repositories {
 
 sourceSets { main { java { srcDir(layout.buildDirectory.dir('generated/sources/buildinfo/java/main')) } } }
 
+// Resolve the current Git commit for reproducible support/debug information.
 def gitCommit = "unknown"
 try {
   def detectedCommit = "git rev-parse --short HEAD".execute([], rootDir).text.trim()
@@ -27,12 +28,21 @@ try {
 
 def buildDate = new Date().format("yyyy-MM-dd HH:mm 'UTC'", TimeZone.getTimeZone('UTC'))
 
+// Build-time metadata embedded into the extension.
+//
+// Values are exposed through ghidra_tblstring.BuildInfo and used by:
+//   - the About dialog
+//   - support/debug information
+//   - CI/release tracking
+//
+// Stable metadata values live in gradle.properties so releases do not require
+// editing build logic.
 buildInfo {
-  packageName = 'ghidra_tblstring'
+  packageName = property('plugin.packageName')
   className = 'BuildInfo'
   properties = [
-    PLUGIN_VERSION: "0.1.0",
-    PLUGIN_GHIDRA_COMPATIBILITY: "12.0.4",
+    PLUGIN_VERSION: property('plugin.version'),
+    PLUGIN_GHIDRA_COMPATIBILITY: property('plugin.ghidraCompatibility'),
     PLUGIN_BUILD_DATE: buildDate,
     PLUGIN_BUILD_COMMIT: gitCommit,
   ]
@@ -58,6 +68,11 @@ test {
     showCauses = true
     showStackTraces = true
     showStandardStreams = false
+  }
+
+  testLogging {
+    // set options for log level LIFECYCLE
+    events "failed"
   }
 }
 
@@ -91,6 +106,14 @@ spotless {
 }
 
 
+// Resolve the active Ghidra installation.
+//
+// Priority order:
+//   1. GHIDRA_INSTALL_DIR environment variable
+//   2. -PGHIDRA_INSTALL_DIR Gradle project property
+//
+// The project property allows CI/local builds to compile against Ghidra
+// without exporting a persistent shell environment variable.
 def ghidraInstallDir
 
 if (System.env.GHIDRA_INSTALL_DIR) {
@@ -107,36 +130,46 @@ else {
     throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
 }
 
-tasks.register('installLocalExtension', Copy) {
+// Keep generated extension archives deterministic and clean.
+tasks.withType(Zip).configureEach {
+  exclude '.github/**'
+  exclude 'gradle/**'
+  exclude 'gradle.properties'
+}
+
+// Convenience task for local development.
+//
+// Installs the latest built extension into a user-managed extensions directory.
+tasks.register('installLocalExtension') {
   group = 'Ghidra Private'
   description = 'Builds and installs the extension into the configured local Ghidra installation.'
   dependsOn tasks.named('buildExtension')
 
-  def extensionDirEnv = System.env.GHIDRA_EXTENSION_DIR
-  if (!extensionDirEnv) {
-    throw new GradleException("GHIDRA_EXTENSION_DIR is not defined!")
-  }
-
-  def extensionsDir = new File(extensionDirEnv).getCanonicalFile()
-  def extensionName = 'ghidra-tblstring'
-  def extensionInstallDir = new File(extensionsDir, extensionName)
-
-  doFirst {
-    if (extensionInstallDir.exists()) {
-      delete extensionInstallDir
+  doLast {
+    def extensionDirEnv = System.env.GHIDRA_EXTENSION_DIR
+    if (!extensionDirEnv) {
+      throw new GradleException("GHIDRA_EXTENSION_DIR is not defined!")
     }
-  }
 
-  from({
+    def extensionsDir = new File(extensionDirEnv).getCanonicalFile()
+    def extensionName = 'ghidra-tblstring'
+    def extensionInstallDir = new File(extensionsDir, extensionName)
+
     def extensionZips = fileTree('dist') {
       include '*.zip'
     }.files.sort { a, b -> b.lastModified() <=> a.lastModified() }
 
     if (extensionZips.isEmpty()) {
-      throw new GradleException("No extension zip found in dist/. Run buildExtension first.")
+      throw new GradleException("No extension zip found in dist/. buildExtension did not produce a zip.")
     }
 
-    zipTree(extensionZips.first())
-  })
-  into extensionsDir
+    if (extensionInstallDir.exists()) {
+      delete extensionInstallDir
+    }
+
+    copy {
+      from zipTree(extensionZips.first())
+      into extensionsDir
+    }
+  }
 }

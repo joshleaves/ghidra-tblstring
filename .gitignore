@@ -4,6 +4,13 @@
 # Ignore Gradle build output directory
 build
 dist
+bin
 
 # Ignore Kotlin plugin data
 .kotlin
+
+.env
+.DS_Store
+
+# Ignore test-related data
+src/test/resources/data/

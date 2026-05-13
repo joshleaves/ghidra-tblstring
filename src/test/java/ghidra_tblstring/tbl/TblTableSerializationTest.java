@@ -52,4 +52,20 @@ final class TblTableSerializationTest {
           original.getEntries().get(i).getValue(), reloaded.getEntries().get(i).getValue());
     }
   }
+
+  @DisplayName("serialized dump mappings round-trip through parser")
+  @Test
+  void serializeDumpMappingsRoundTripsThroughParser() throws IOException {
+    TblTable original = TestUtils.parseTblTableString("$FD=[linebreak]\\n\n/FF=[END]\\n\\n\n");
+
+    TblTable reloaded = TblTable.parse("test", new StringReader(original.toTblString()));
+
+    assertEquals(original.getEntries().size(), reloaded.getEntries().size());
+    for (int i = 0; i < original.getEntries().size(); i++) {
+      assertArrayEquals(
+          original.getEntries().get(i).getKey(), reloaded.getEntries().get(i).getKey());
+      assertEquals(
+          original.getEntries().get(i).getValue(), reloaded.getEntries().get(i).getValue());
+    }
+  }
 }

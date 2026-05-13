@@ -16,6 +16,13 @@ import ghidra_tblstring.ghidra.TblStringTableSettingsDefinition;
 import ghidra_tblstring.ui.about.AboutAction;
 import ghidra_tblstring.ui.registry.ViewTblRegistryAction;
 
+/**
+ * Main Ghidra plugin entry point for table-based string decoding.
+ *
+ * <p>The plugin owns one {@link TblRegistry} for the active program, installs the About and
+ * Registry window actions, and refreshes the Code Browser when registry mutations can affect
+ * rendered {@code tblString} data.
+ */
 @PluginInfo(
   status = PluginStatus.RELEASED,
   packageName = MiscellaneousPluginPackage.NAME,
@@ -25,7 +32,13 @@ import ghidra_tblstring.ui.registry.ViewTblRegistryAction;
 public class TblStringPlugin extends ProgramPlugin {
   private final TblRegistry registry = new TblRegistry();
   private final Runnable registryChangeListener = this::updateCodeViewerDisplay;
+  private volatile boolean codeViewerUpdatePending;
 
+  /**
+   * Creates the plugin and installs its actions into the supplied tool.
+   *
+   * @param tool plugin tool that hosts this extension
+   */
   public TblStringPlugin(PluginTool tool) {
     super(tool);
 
@@ -65,8 +78,14 @@ public class TblStringPlugin extends ProgramPlugin {
   }
 
   private void updateCodeViewerDisplay() {
-    Swing.runIfSwingOrRunLater(
+    if (codeViewerUpdatePending) {
+      return;
+    }
+
+    codeViewerUpdatePending = true;
+    Swing.runLater(
         () -> {
+          codeViewerUpdatePending = false;
           CodeViewerService codeViewer = tool.getService(CodeViewerService.class);
           if (codeViewer != null) {
             codeViewer.updateDisplay();

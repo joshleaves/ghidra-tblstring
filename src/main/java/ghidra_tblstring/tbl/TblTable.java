@@ -20,8 +20,6 @@ import java.util.Set;
  * such as {@code 1F} and {@code 1F00}; the longest key must win at each input offset.
  */
 public final class TblTable {
-  private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
-
   private final String name;
   private final List<TblTableEntry> entries;
   private final List<TblTableEntry> longestFirstEntries;
@@ -45,7 +43,7 @@ public final class TblTable {
     Set<String> seenKeys = new HashSet<>();
     for (TblTableEntry entry : copiedEntries) {
       Objects.requireNonNull(entry, "entry");
-      String key = bytesToHex(entry.getKey());
+      String key = TblHex.toHex(entry.getKey());
       if (!seenKeys.add(key)) {
         throw new IllegalArgumentException("duplicate key: " + key);
       }
@@ -152,7 +150,7 @@ public final class TblTable {
         EntryKind entryKind = parseEntryKind(hexPart, lineNumber);
 
         byte[] key = parseHexKey(entryKind.hexPart(), lineNumber);
-        String keyId = bytesToHex(key);
+        String keyId = TblHex.toHex(key);
         if (!seenKeys.add(keyId)) {
           throw new IOException(
               "Invalid .tbl line " + lineNumber + ": duplicate key '" + keyId + "'");
@@ -181,9 +179,9 @@ public final class TblTable {
     StringBuilder result = new StringBuilder();
 
     for (TblTableEntry entry : entries) {
-      result.append(bytesToHex(entry.getKey()));
+      result.append(TblHex.toHex(entry.getKey()));
       result.append('=');
-      result.append(escapeValue(entry.getValue()));
+      result.append(TblTextEscapes.escape(entry.getValue()));
       result.append('\n');
     }
 
@@ -211,21 +209,10 @@ public final class TblTable {
   private static String parseValue(EntryKind entryKind, String valuePart, int lineNumber)
       throws IOException {
     if (entryKind.isNormal()) {
-      return parseNormalValue(valuePart, lineNumber);
+      return TblTextEscapes.unescape(valuePart);
     }
 
     return parseNonNormalValue(entryKind, valuePart, lineNumber);
-  }
-
-  private static String parseNormalValue(String valuePart, int lineNumber) throws IOException {
-    if (valuePart.indexOf('[') >= 0 || valuePart.indexOf(']') >= 0) {
-      throw new IOException(
-          "Invalid .tbl line "
-              + lineNumber
-              + ": normal entries cannot contain '[' or ']' characters");
-    }
-
-    return unescapeValue(valuePart);
   }
 
   private static String parseNonNormalValue(EntryKind entryKind, String valuePart, int lineNumber)
@@ -256,7 +243,7 @@ public final class TblTable {
       }
     }
 
-    return "[" + label + "]" + unescapeValue(suffix);
+    return "[" + label + "]" + TblTextEscapes.unescape(suffix);
   }
 
   private record EntryKind(char prefix, String hexPart) {
@@ -277,102 +264,11 @@ public final class TblTable {
   }
 
   private static byte[] parseHexKey(String hex, int lineNumber) throws IOException {
-    String normalized = hex.replaceAll("\\s+", "");
-
-    if (normalized.isEmpty()) {
-      throw new IOException("Invalid .tbl line " + lineNumber + ": empty key");
+    try {
+      return TblHex.parseKey(hex);
+    } catch (IllegalArgumentException e) {
+      Throwable cause = e.getCause() == null ? e : e.getCause();
+      throw new IOException("Invalid .tbl line " + lineNumber + ": " + e.getMessage(), cause);
     }
-
-    if ((normalized.length() % 2) != 0) {
-      throw new IOException(
-          "Invalid .tbl line " + lineNumber + ": hex key must have an even number of digits");
-    }
-
-    byte[] bytes = new byte[normalized.length() / 2];
-    for (int i = 0; i < bytes.length; i++) {
-      int offset = i * 2;
-      String pair = normalized.substring(offset, offset + 2);
-
-      try {
-        bytes[i] = (byte) Integer.parseInt(pair, 16);
-      } catch (NumberFormatException e) {
-        throw new IOException(
-            "Invalid .tbl line " + lineNumber + ": invalid hex byte '" + pair + "'", e);
-      }
-    }
-
-    return bytes;
-  }
-
-  private static String unescapeValue(String value) {
-    StringBuilder result = new StringBuilder();
-
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      if (c != '\\' || i + 1 >= value.length()) {
-        result.append(c);
-        continue;
-      }
-
-      char next = value.charAt(++i);
-      switch (next) {
-        case 'n':
-          result.append('\n');
-          break;
-        case 'r':
-          result.append('\r');
-          break;
-        case 't':
-          result.append('\t');
-          break;
-        case '\\':
-          result.append('\\');
-          break;
-        default:
-          result.append(next);
-          break;
-      }
-    }
-
-    return result.toString();
-  }
-
-  private static String escapeValue(String value) {
-    StringBuilder result = new StringBuilder(value.length());
-
-    for (int i = 0; i < value.length(); i++) {
-      char c = value.charAt(i);
-      switch (c) {
-        case '\n':
-          result.append("\\n");
-          break;
-        case '\r':
-          result.append("\\r");
-          break;
-        case '\t':
-          result.append("\\t");
-          break;
-        case '\\':
-          result.append("\\\\");
-          break;
-        default:
-          result.append(c);
-          break;
-      }
-    }
-
-    return result.toString();
-  }
-
-  private static String bytesToHex(byte[] bytes) {
-    StringBuilder result = new StringBuilder(bytes.length * 2);
-
-    for (byte b : bytes) {
-      int value = b & 0xff;
-      result.append(HEX_DIGITS[(value >>> 4) & 0xf]);
-      result.append(HEX_DIGITS[value & 0xf]);
-    }
-
-    return result.toString();
   }
 }

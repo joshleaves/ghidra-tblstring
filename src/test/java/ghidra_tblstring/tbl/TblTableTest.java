@@ -59,6 +59,14 @@ final class TblTableTest {
     assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0x41), "A");
   }
 
+  @DisplayName("table id declarations do not override explicit names")
+  @Test
+  void parseKeepsExplicitNamesOverTableIdDeclarations() throws IOException {
+    TblTable table = TblTable.parse("explicit", new java.io.StringReader("@HIRA\n41=A\n"));
+
+    assertEquals("explicit", table.getName());
+  }
+
   @DisplayName("allows whitespace around keys and separators")
   @Test
   void parseAllowsWhitespaceInsideHexKeyAndAroundSeparator() throws IOException {
@@ -110,6 +118,14 @@ final class TblTableTest {
     TblTable table = TestUtils.parseTblTableString("00=\n");
 
     assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0x00), "");
+  }
+
+  @DisplayName("allows bracketed normal values")
+  @Test
+  void parseAllowsBracketedNormalValues() throws IOException {
+    TblTable table = TestUtils.parseTblTableString("41=[A]\n");
+
+    assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0x41), "[A]");
   }
 
   @DisplayName("sorts longest keys first without mutating original order")
@@ -246,17 +262,6 @@ final class TblTableTest {
     assertEquals("Invalid .tbl line 2: duplicate key '41'", exception.getMessage());
   }
 
-  @DisplayName("rejects normal entries containing bracket tokens")
-  @Test
-  void parseRejectsNormalEntriesContainingBracketTokens() {
-    IOException exception =
-        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("41=[A]\n"));
-
-    assertEquals(
-        "Invalid .tbl line 1: normal entries cannot contain '[' or ']' characters",
-        exception.getMessage());
-  }
-
   @DisplayName("rejects unsupported table switches")
   @Test
   void parseRejectsUnsupportedTableSwitches() {
@@ -273,6 +278,15 @@ final class TblTableTest {
         assertThrows(IOException.class, () -> TblTable.parse("", new java.io.StringReader("@BAD-ID\n41=A\n")));
 
     assertEquals("Invalid .tbl line 1: invalid table id 'BAD-ID'", exception.getMessage());
+  }
+
+  @DisplayName("rejects empty table id declarations")
+  @Test
+  void parseRejectsEmptyTableIdDeclarations() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TblTable.parse("", new java.io.StringReader("@ \n41=A\n")));
+
+    assertEquals("Invalid .tbl line 1: empty table id", exception.getMessage());
   }
 
   @DisplayName("reports physical line numbers after skipped lines")
@@ -293,6 +307,15 @@ final class TblTableTest {
     assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0xff), "[END]\n\n");
   }
 
+  @DisplayName("rejects end tokens with parameters")
+  @Test
+  void parseRejectsEndTokensWithParameters() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("/FF=[END],ignored\n"));
+
+    assertEquals("Invalid .tbl line 1: end tokens cannot have parameters", exception.getMessage());
+  }
+
   @DisplayName("parses simple control codes as dump mappings")
   @Test
   void parseSimpleControlCodesAsDumpMappings() throws IOException {
@@ -300,5 +323,16 @@ final class TblTableTest {
 
     assertEntry(table.getEntries().get(0), TestUtils.toBytesArray(0xfd), "[linebreak]\n");
     assertEntry(table.getEntries().get(1), TestUtils.toBytesArray(0xfe), "[Color]");
+  }
+
+  @DisplayName("rejects invalid non-normal labels")
+  @Test
+  void parseRejectsInvalidNonNormalLabels() {
+    IOException exception =
+        assertThrows(IOException.class, () -> TestUtils.parseTblTableString("$FD=[line-break]\n"));
+
+    assertEquals(
+        "Invalid .tbl line 1: invalid non-normal entry label 'line-break'",
+        exception.getMessage());
   }
 }
