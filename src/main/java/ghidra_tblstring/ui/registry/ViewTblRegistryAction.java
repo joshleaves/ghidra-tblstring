@@ -3,10 +3,13 @@ package ghidra_tblstring.ui.registry;
 
 import docking.ComponentProvider;
 import docking.WindowPosition;
+import docking.widgets.filechooser.GhidraFileChooser;
+import docking.widgets.filechooser.GhidraFileChooserMode;
 import docking.widgets.textfield.HintTextField;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
+import ghidra.util.filechooser.ExtensionFileFilter;
 import ghidra_tblstring.ghidra.TblRegistry;
 import ghidra_tblstring.tbl.TblHex;
 import ghidra_tblstring.tbl.TblTextEscapes;
@@ -36,7 +39,6 @@ import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.Icon;
-import javax.swing.JFileChooser;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -52,7 +54,6 @@ import javax.swing.RowFilter;
 import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
@@ -80,6 +81,10 @@ public final class ViewTblRegistryAction {
   private static final Icon ADD_ENTRY_ICON = ResourceManager.loadImage("images/small_plus.png");
   private static final Icon REMOVE_ENTRY_ICON = ResourceManager.loadImage("images/list-remove.png");
   private static final Icon EXPORT_ICON = ResourceManager.loadImage("images/disk_save_as.png");
+  private static final String TBL_FILE_CHOOSER_LAST_DIR_KEY =
+      "ghidra_tblstring.registry.tblFileChooser.lastDir";
+  private static final ExtensionFileFilter TBL_FILE_FILTER =
+      ExtensionFileFilter.forExtensions(".tbl files", "tbl");
   private final TblRegistryProvider provider;
 
   /**
@@ -440,15 +445,11 @@ public final class ViewTblRegistryAction {
         return;
       }
 
-      JFileChooser chooser = new JFileChooser();
-      chooser.setDialogTitle("Import .tbl table");
-      chooser.setFileFilter(new FileNameExtensionFilter(".tbl files", "tbl"));
-
-      if (chooser.showOpenDialog(component) != JFileChooser.APPROVE_OPTION) {
+      Path path = chooseTblFile("Import .tbl table", "Import", null).orElse(null);
+      if (path == null) {
         return;
       }
 
-      Path path = chooser.getSelectedFile().toPath();
       try {
         String content = Files.readString(path, StandardCharsets.UTF_8);
         TblTable table =
@@ -601,16 +602,12 @@ public final class ViewTblRegistryAction {
         return;
       }
 
-      JFileChooser chooser = new JFileChooser();
-      chooser.setDialogTitle("Save .tbl table as");
-      chooser.setSelectedFile(new File(table.getName()));
-      chooser.setFileFilter(new FileNameExtensionFilter(".tbl files", "tbl"));
-
-      if (chooser.showSaveDialog(component) != JFileChooser.APPROVE_OPTION) {
+      Path path =
+          chooseTblFile("Save .tbl table as", "Save", new File(table.getName())).orElse(null);
+      if (path == null) {
         return;
       }
 
-      Path path = chooser.getSelectedFile().toPath();
       if (Files.exists(path)) {
         if (!confirmWarning("Overwrite " + path.getFileName() + "?")) {
           return;
@@ -630,6 +627,26 @@ public final class ViewTblRegistryAction {
         setStatus("Saved " + path.getFileName());
       } catch (IOException | RuntimeException e) {
         showError(TBL_REGISTRY_WINDOW_NAME, "Failed to save .tbl table: " + e.getMessage(), e);
+      }
+    }
+
+    private Optional<Path> chooseTblFile(String title, String approveButtonText, File selectedFile) {
+      GhidraFileChooser chooser = new GhidraFileChooser(component);
+      try {
+        chooser.setTitle(title);
+        chooser.setApproveButtonText(approveButtonText);
+        chooser.setFileSelectionMode(GhidraFileChooserMode.FILES_ONLY);
+        chooser.setLastDirectoryPreference(TBL_FILE_CHOOSER_LAST_DIR_KEY);
+        chooser.setFileFilter(TBL_FILE_FILTER);
+        chooser.setSelectedFileFilter(TBL_FILE_FILTER);
+        if (selectedFile != null) {
+          chooser.setSelectedFile(selectedFile);
+        }
+
+        File file = chooser.getSelectedFile(true);
+        return file == null ? Optional.empty() : Optional.of(file.toPath());
+      } finally {
+        chooser.dispose();
       }
     }
 
