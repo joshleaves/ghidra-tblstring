@@ -5,6 +5,7 @@ import docking.ComponentProvider;
 import docking.WindowPosition;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.filechooser.GhidraFileChooserMode;
+import docking.widgets.table.GTable;
 import docking.widgets.textfield.HintTextField;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
@@ -16,8 +17,6 @@ import ghidra_tblstring.tbl.TblTextEscapes;
 import ghidra_tblstring.tbl.TblTable;
 import ghidra_tblstring.tbl.TblTableEntry;
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.io.File;
@@ -45,18 +44,15 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
-import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
 import javax.swing.JTree;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
-import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.JTableHeader;
 import javax.swing.table.TableRowSorter;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -120,7 +116,7 @@ public final class ViewTblRegistryAction {
     private final DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
     private final JTree tableTree = new JTree(treeModel);
     private final TblEntryTableModel entryModel;
-    private final JTable entryTable;
+    private final GTable entryTable;
     private final TableRowSorter<TblEntryTableModel> entrySorter;
     private final JTextField filterField = new HintTextField("Search");
     private final JLabel tableTitle = new JLabel("No table selected");
@@ -145,7 +141,7 @@ public final class ViewTblRegistryAction {
       this.registry = Objects.requireNonNull(registry, "registry");
       this.programSupplier = Objects.requireNonNull(programSupplier, "programSupplier");
       this.entryModel = new TblEntryTableModel(this::updateEntry);
-      this.entryTable = new JTable(entryModel);
+      this.entryTable = new GTable(entryModel);
       this.entrySorter = new TableRowSorter<>(entryModel);
       this.component = buildComponent();
 
@@ -291,7 +287,6 @@ public final class ViewTblRegistryAction {
       entryTable.getColumnModel().getColumn(0).setPreferredWidth(160);
       entryTable.getColumnModel().getColumn(1).setPreferredWidth(520);
       entryTable.getColumnModel().getColumn(1).setCellRenderer(new ValueCellRenderer());
-      entryTable.getTableHeader().setDefaultRenderer(new HeaderCellRenderer(entryTable));
     }
 
     private void refreshFromProgram() {
@@ -954,33 +949,6 @@ public final class ViewTblRegistryAction {
   }
 
   private record SelectedSourceTable(TblTable table, Path path) {}
-
-  private static final class HeaderCellRenderer extends DefaultTableCellRenderer {
-    HeaderCellRenderer(JTable table) {
-      JTableHeader header = table.getTableHeader();
-      setFont(header.getFont());
-      setBorder(UIManager.getBorder("TableHeader.cellBorder"));
-      setHorizontalAlignment(LEADING);
-      setOpaque(true);
-    }
-
-    @Override
-    public Component getTableCellRendererComponent(
-        JTable table,
-        Object value,
-        boolean isSelected,
-        boolean hasFocus,
-        int row,
-        int column) {
-      super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
-      Color background = UIManager.getColor("Panel.background");
-      Color foreground = UIManager.getColor("Label.foreground");
-      setBackground(background != null ? background : table.getBackground());
-      setForeground(foreground != null ? foreground : table.getForeground());
-      return this;
-    }
-  }
 
   private static final class TableTreeCellRenderer extends DefaultTreeCellRenderer {
     @Override
