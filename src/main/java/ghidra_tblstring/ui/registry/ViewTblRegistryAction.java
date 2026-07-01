@@ -3,9 +3,12 @@ package ghidra_tblstring.ui.registry;
 
 import docking.ComponentProvider;
 import docking.WindowPosition;
+import docking.widgets.OptionDialog;
+import docking.widgets.button.GButton;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.filechooser.GhidraFileChooserMode;
 import docking.widgets.table.GTable;
+import docking.widgets.table.GTableCellRenderer;
 import docking.widgets.textfield.HintTextField;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
@@ -36,11 +39,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -52,7 +53,6 @@ import javax.swing.RowFilter;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
-import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
@@ -123,13 +123,13 @@ public final class ViewTblRegistryAction {
     private final JLabel tableSummary = new JLabel("No table");
     private final JLabel tableCount = new JLabel("0 table(s)");
     private final JLabel defaultTableLabel = new JLabel("Default table: <none>");
-    private final JButton removeTableButton = new JButton("Remove", REMOVE_TABLE_ICON);
-    private final JButton reloadSourceButton = new JButton("Reload from Source File");
-    private final JButton overwriteSourceButton = new JButton("Overwrite Source File");
-    private final JButton saveAsButton = new JButton("Save as", EXPORT_ICON);
-    private final JButton setDefaultButton = new JButton("Set as Default");
-    private final JButton addEntryButton = new JButton("Add Entry", ADD_ENTRY_ICON);
-    private final JButton removeEntryButton = new JButton("Remove Entry", REMOVE_ENTRY_ICON);
+    private final GButton removeTableButton = button("Remove", REMOVE_TABLE_ICON);
+    private final GButton reloadSourceButton = new GButton("Reload from Source File");
+    private final GButton overwriteSourceButton = new GButton("Overwrite Source File");
+    private final GButton saveAsButton = button("Save as", EXPORT_ICON);
+    private final GButton setDefaultButton = new GButton("Set as Default");
+    private final GButton addEntryButton = button("Add Entry", ADD_ENTRY_ICON);
+    private final GButton removeEntryButton = button("Remove Entry", REMOVE_ENTRY_ICON);
     private String selectedTableId;
     private boolean refreshingControls;
 
@@ -184,7 +184,7 @@ public final class ViewTblRegistryAction {
       JToolBar toolbar = new JToolBar();
       toolbar.setFloatable(false);
 
-      JButton addButton = new JButton("Add .tbl...", ADD_TABLE_ICON);
+      GButton addButton = button("Add .tbl...", ADD_TABLE_ICON);
       addButton.addActionListener(event -> importTable());
       toolbar.add(addButton);
 
@@ -863,7 +863,7 @@ public final class ViewTblRegistryAction {
 
     private void showInfo(String title, String message) {
       setStatus(message);
-      JOptionPane.showMessageDialog(component, message, title, JOptionPane.INFORMATION_MESSAGE);
+      Msg.showInfo(ViewTblRegistryAction.class, component, title, message);
     }
 
     private void showError(String title, String message, Throwable throwable) {
@@ -872,14 +872,20 @@ public final class ViewTblRegistryAction {
     }
 
     private boolean confirmWarning(String message) {
-      return JOptionPane.showConfirmDialog(
+      return OptionDialog.showOptionDialogWithCancelAsDefaultButton(
               component,
-              message,
               TBL_REGISTRY_WINDOW_NAME,
-              JOptionPane.OK_CANCEL_OPTION,
-              JOptionPane.WARNING_MESSAGE)
-          == JOptionPane.OK_OPTION;
+              message,
+              "OK",
+              OptionDialog.WARNING_MESSAGE)
+          == OptionDialog.OPTION_ONE;
     }
+  }
+
+  private static GButton button(String text, Icon icon) {
+    GButton button = new GButton(text);
+    button.setIcon(icon);
+    return button;
   }
 
   private interface EntryUpdateHandler {
@@ -971,11 +977,11 @@ public final class ViewTblRegistryAction {
     }
   }
 
-  private static final class ValueCellRenderer extends DefaultTableCellRenderer {
+  private static final class ValueCellRenderer extends GTableCellRenderer {
     @Override
-    protected void setValue(Object value) {
+    protected String getText(Object value) {
       String text = value == null ? "" : value.toString();
-      super.setValue(text.isEmpty() ? "<empty>" : text);
+      return text.isEmpty() ? "<empty>" : text;
     }
   }
 

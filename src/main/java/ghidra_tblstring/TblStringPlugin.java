@@ -15,6 +15,7 @@ import ghidra_tblstring.ghidra.TblRegistry;
 import ghidra_tblstring.ghidra.TblStringTableSettingsDefinition;
 import ghidra_tblstring.ui.about.AboutAction;
 import ghidra_tblstring.ui.registry.ViewTblRegistryAction;
+import ghidra_tblstring.ui.search.ViewTblStringSearchAction;
 
 /**
  * Main Ghidra plugin entry point for table-based string decoding.
@@ -47,6 +48,7 @@ public class TblStringPlugin extends ProgramPlugin {
 
     new AboutAction(tool, getName());
     new ViewTblRegistryAction(tool, getName(), registry, this::getCurrentProgram);
+    new ViewTblStringSearchAction(tool, getName(), registry, this::getCurrentProgram);
   }
 
   @Override

@@ -65,4 +65,23 @@ final class TblStringDataTypeTest {
 
     assertEquals("credits", dataType.getCharsetName(new SettingsImpl()));
   }
+
+  @DisplayName("default table settings follow later registry default changes")
+  @Test
+  void defaultTableSettingsFollowRegistryDefaultChanges() throws IOException {
+    TblRegistry activeRegistry = new TblRegistry();
+    activeRegistry.register("credits", TestUtils.parseTblTableString("41=A\n"));
+    activeRegistry.register("menu", TestUtils.parseTblTableString("42=B\n"));
+    TblStringTableSettingsDefinition.setRegistrySupplier(() -> activeRegistry);
+
+    SettingsImpl settings = new SettingsImpl();
+    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 0);
+    TblStringDataType dataType = new TblStringDataType();
+
+    assertEquals("credits", dataType.getCharsetName(settings));
+
+    activeRegistry.setDefaultTableId("menu");
+
+    assertEquals("menu", dataType.getCharsetName(settings));
+  }
 }

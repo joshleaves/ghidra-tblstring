@@ -21,9 +21,9 @@ final class TblStringTableSettingsDefinitionTest {
     TblStringTableSettingsDefinition.setRegistrySupplier(null);
   }
 
-  @DisplayName("table choices show the default table first without duplicates")
+  @DisplayName("table choices expose a default sentinel before explicit table choices")
   @Test
-  void tableChoicesShowDefaultFirstWithoutDuplicates() {
+  void tableChoicesExposeDefaultSentinelBeforeExplicitChoices() {
     TblRegistry registry = new TblRegistry();
     registry.register(
         "credits-2b",
@@ -41,7 +41,7 @@ final class TblStringTableSettingsDefinitionTest {
     SettingsImpl settings = new SettingsImpl();
 
     assertArrayEquals(
-        new String[] {"credits.1b.tbl", "credits.2b.tbl"},
+        new String[] {"Default (credits.1b.tbl)", "credits.1b.tbl", "credits.2b.tbl"},
         TblStringTableSettingsDefinition.TABLE.getDisplayChoices(settings));
   }
 
@@ -63,10 +63,35 @@ final class TblStringTableSettingsDefinitionTest {
     TblStringTableSettingsDefinition.setRegistrySupplier(() -> registry);
 
     SettingsImpl settings = new SettingsImpl();
-    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 1);
+    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 2);
 
     assertEquals("credits-2b", TblStringTableSettingsDefinition.TABLE.getTableId(settings).orElseThrow());
-    assertEquals(1, TblStringTableSettingsDefinition.TABLE.getChoice(settings));
+    assertEquals(2, TblStringTableSettingsDefinition.TABLE.getChoice(settings));
+  }
+
+  @DisplayName("default table choice clears explicit table ids")
+  @Test
+  void defaultTableChoiceClearsExplicitIds() {
+    TblRegistry registry = new TblRegistry();
+    registry.register(
+        "credits-2b",
+        new TblTable(
+            "credits.2b.tbl",
+            List.of(new TblTableEntry(TestUtils.toBytesArray(0x41), "A"))));
+    registry.register(
+        "credits-1b",
+        new TblTable(
+            "credits.1b.tbl",
+            List.of(new TblTableEntry(TestUtils.toBytesArray(0x42), "B"))));
+    registry.setDefaultTableId("credits-1b");
+    TblStringTableSettingsDefinition.setRegistrySupplier(() -> registry);
+
+    SettingsImpl settings = new SettingsImpl();
+    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 2);
+    TblStringTableSettingsDefinition.TABLE.setChoice(settings, 0);
+
+    assertFalse(TblStringTableSettingsDefinition.TABLE.getTableId(settings).isPresent());
+    assertEquals(0, TblStringTableSettingsDefinition.TABLE.getChoice(settings));
   }
 
   @DisplayName("invalid table choices clear the stored table id")

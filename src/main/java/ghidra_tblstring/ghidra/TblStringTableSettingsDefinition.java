@@ -20,6 +20,8 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
   private static final String TABLE_ID_SETTING_NAME = "tblString.tableId";
   private static final String TABLE_NAME = ".tbl Table";
   private static final String NO_TABLES_CHOICE = "<no .tbl tables registered>";
+  private static final String DEFAULT_CHOICE_PREFIX = "Default (";
+  private static final String DEFAULT_CHOICE_SUFFIX = ")";
 
   public static final TblStringTableSettingsDefinition TABLE = new TblStringTableSettingsDefinition();
 
@@ -82,7 +84,7 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
 
     String selectedTableId = getTableId(settings).orElse(null);
     for (int i = 0; i < choices.size(); i++) {
-      if (choices.get(i).id.equals(selectedTableId)) {
+      if (choices.get(i).matches(selectedTableId)) {
         return i;
       }
     }
@@ -98,7 +100,13 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
       return;
     }
 
-    settings.setString(TABLE_ID_SETTING_NAME, choices.get(ordinalOfValue).id);
+    TableChoice choice = choices.get(ordinalOfValue);
+    if (choice.isDefaultChoice()) {
+      settings.clearSetting(TABLE_ID_SETTING_NAME);
+      return;
+    }
+
+    settings.setString(TABLE_ID_SETTING_NAME, choice.id);
   }
 
   @Override
@@ -169,16 +177,27 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
   private static List<TableChoice> getTableChoices() {
     return getCurrentRegistry().<List<TableChoice>>map(
         registry -> {
-          Set<String> orderedIds = new LinkedHashSet<>();
-          registry.getDefaultTableId().ifPresent(orderedIds::add);
+          if (registry.isEmpty()) {
+            return List.of();
+          }
+
+          List<TableChoice> choices = new ArrayList<>();
+          registry
+              .getDefaultTableId()
+              .ifPresent(
+                  id ->
+                      choices.add(
+                          TableChoice.defaultChoice(
+                              DEFAULT_CHOICE_PREFIX
+                                  + registry.require(id).getName()
+                                  + DEFAULT_CHOICE_SUFFIX)));
 
           List<String> sortedIds = new ArrayList<>(registry.ids());
           sortedIds.sort(
               Comparator.comparing(
                   id -> registry.require(id).getName().toLowerCase(Locale.ROOT)));
-          orderedIds.addAll(sortedIds);
 
-          List<TableChoice> choices = new ArrayList<>();
+          Set<String> orderedIds = new LinkedHashSet<>(sortedIds);
           for (String id : orderedIds) {
             choices.add(new TableChoice(id, registry.require(id).getName()));
           }
@@ -190,10 +209,28 @@ public final class TblStringTableSettingsDefinition implements EnumSettingsDefin
   private static final class TableChoice {
     private final String id;
     private final String name;
+    private final boolean defaultChoice;
 
     private TableChoice(String id, String name) {
+      this(id, name, false);
+    }
+
+    private TableChoice(String id, String name, boolean defaultChoice) {
       this.id = id;
       this.name = name;
+      this.defaultChoice = defaultChoice;
+    }
+
+    private static TableChoice defaultChoice(String name) {
+      return new TableChoice(null, name, true);
+    }
+
+    private boolean isDefaultChoice() {
+      return defaultChoice;
+    }
+
+    private boolean matches(String selectedTableId) {
+      return !defaultChoice && id.equals(selectedTableId);
     }
   }
 }
